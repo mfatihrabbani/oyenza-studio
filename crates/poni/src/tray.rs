@@ -56,6 +56,8 @@ pub enum MenuCmd {
     SetTheme(Theme),
     ToggleClipboard,
     ToggleQuickAdd,
+    CopyClaudeHooks,
+    CopyCodexNotify,
     ToggleSystemHistory,
     ToggleLyrics,
     TogglePronunciation,
@@ -127,6 +129,14 @@ pub fn menu_items(s: &Settings, pinned: bool, oyenza: &OyenzaLink, recorder: boo
         oyenza_menu(s, oyenza),
         item("Clipboard history", MenuCmd::ToggleClipboard, s.clipboard_history),
         item("Quick add from any app (Alt+Shift+Space)", MenuCmd::ToggleQuickAdd, s.quick_add),
+        MenuItem::Sub {
+            label: "AI sessions (Claude Code, Codex)".into(),
+            items: vec![
+                MenuItem::Info { label: "Copy, then paste into the tool's settings".into() },
+                item("Copy Claude Code hooks (~/.claude/settings.json)", MenuCmd::CopyClaudeHooks, false),
+                item("Copy Codex notify line (~/.codex/config.toml)", MenuCmd::CopyCodexNotify, false),
+            ],
+        },
         item("Keep System page history", MenuCmd::ToggleSystemHistory, s.system_history),
         item("Sounds", MenuCmd::ToggleSounds, s.sounds),
         MenuItem::Sub {

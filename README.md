@@ -308,6 +308,17 @@ Press **Alt+Shift+Space** in any app: the island opens on **Tasks** with its fie
 
 Anything else is a task. **Quick add from any app** in the tray menu turns the shortcut off.
 
+### AI sessions
+
+Working with Claude Code or Codex? The island tells you when a session **needs you** (a permission, a question) and when it's **done**, with **Open**, which brings its terminal or editor window to the front. While any session is known, an **AI** tab lists them all: the ones that need you first, then working, then done, each with Open. Finished ones leave after half an hour. On Windows.
+
+The tools tell the island themselves, through their own hooks; nothing polls or listens in between. Right-click the island (or the tray icon) → **AI sessions (Claude Code, Codex)**:
+
+- **Copy Claude Code hooks**, then paste them into `~/.claude/settings.json` (merge with a `hooks` block you already have).
+- **Copy Codex notify line**, then paste it into `~/.codex/config.toml`.
+
+Both name the `poni.exe` that's installed, which, run by a hook, passes what the tool said to the running island and exits at once. Open uses the window that was in front when you sent the prompt, else the first window whose title names the session's folder. Codex says only when a turn is done, so its sessions show as done, not working.
+
 ### Phone drop
 
 Send photos and files from your phone to the Shelf, or save Shelf files on your phone, over your own Wi-Fi. Nothing to install on the phone, and it works with iPhones and Android phones alike.

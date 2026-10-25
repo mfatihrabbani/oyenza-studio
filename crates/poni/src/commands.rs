@@ -125,4 +125,6 @@ pub enum Command {
     Pair(PairCmd),
     Oyenza(OyenzaCmd),
     Calendar(CalendarCmd),
+    /// Bring an AI session's window to the front (its key).
+    OpenAgent(String),
 }

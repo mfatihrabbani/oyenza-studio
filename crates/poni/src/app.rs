@@ -99,6 +99,10 @@ pub enum Deferred {
 
 pub fn main_entry() -> i32 {
     let args: Vec<String> = std::env::args().collect();
+    // An AI tool's hook: pass what it said to the running island and exit.
+    if let Some(i) = args.iter().position(|a| a == services::agents::ARG) {
+        return services::agents::forward(args.get(i + 1).map_or("", String::as_str), args.get(i + 2).map(String::as_str));
+    }
     // Show over games' one-time OK runs this exe elevated, just for this.
     if let Some(i) = args.iter().position(|a| a == services::frames::ALLOW_ARG) {
         return services::frames::allow_main(args.get(i + 1).map_or("", String::as_str));
@@ -1102,6 +1106,13 @@ impl App {
                 }
                 Some(LRESULT(0))
             }
+            // An AI tool's hook (`services::agents`).
+            WM_COPYDATA => {
+                if let Some(ev) = unsafe { services::agents::received(lp) } {
+                    self.on_agent(ev);
+                }
+                Some(LRESULT(1))
+            }
             WM_POWERBROADCAST => {
                 if let Some(on) = services::power::display_state_change(wp, lp) {
                     self.display_off = !on;
@@ -1271,6 +1282,51 @@ impl App {
         }
         self.refetch_lyrics();
         self.st.notify(Icon::Lyrics, palette::BLUE, "Checking the Apple Music token", "One moment", 4.0, None);
+    }
+
+    // ------------------------------------------------------------ AI sessions
+
+    /// An AI tool said something (`services::agents`). A turn starting
+    /// remembers the window in front, for Open; a session that needs you or
+    /// just finished gets a notice with Open, unless its window is in front.
+    fn on_agent(&mut self, ev: poni_core::agents::Event) {
+        use poni_core::agents::State;
+        self.refresh_time();
+        let fg = unsafe { GetForegroundWindow() };
+        let fg = (!fg.is_invalid() && fg != self.hwnd && fg != self.helper).then_some(fg.0 as isize);
+        let window = if ev.state == State::Working { fg } else { None };
+        let unix = self.st.unix;
+        let said = self.st.agents.sessions.apply(ev, unix, window).cloned();
+        self.request_frame();
+        let Some(s) = said else { return };
+        pinfo!("agents: {} {:?}", s.tool.name(), s.state);
+        if s.window != 0 && Some(s.window) == fg {
+            return;
+        }
+        let (title, color, secs) = match s.state {
+            State::Waiting => (format!("{} needs you", s.tool.name()), palette::ORANGE, 60.0),
+            _ => (format!("{} is done", s.tool.name()), palette::GREEN, 12.0),
+        };
+        let subtitle = if s.message.is_empty() { s.title.clone() } else { format!("{} \u{b7} {}", s.title, s.message) };
+        self.st.notify(Icon::Agent, color, title, subtitle, secs, Some(NoticeAction::OpenPage(PageKind::Agents)));
+        self.st.set_notice_inline(InlineAction::OpenAgent);
+        self.st.agents.notice_for = Some(s.key);
+        self.st.chime();
+    }
+
+    /// Open: the session's window to the front (a finished one leaves the list).
+    fn open_agent(&mut self, key: &str) {
+        let Some(s) = self.st.agents.sessions.get(key).cloned() else { return };
+        if !services::agents::bring_to_front(s.window, &s.title) {
+            self.st.notify(Icon::Agent, palette::ORANGE, "Window not found", format!("{} \u{b7} {}", s.tool.name(), s.title), 4.0, None);
+            return;
+        }
+        if s.state == poni_core::agents::State::Done {
+            self.st.agents.sessions.remove(key);
+        }
+        if self.expanded {
+            self.collapse();
+        }
     }
 
     // ------------------------------------------------------------ calendar
@@ -1752,6 +1808,16 @@ impl App {
             SetTheme(theme) => s.theme = theme,
             ToggleClipboard => s.clipboard_history = !s.clipboard_history,
             ToggleQuickAdd => s.quick_add = !s.quick_add,
+            CopyClaudeHooks | CopyCodexNotify => {
+                let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                let (text, whereto) = if cmd == CopyClaudeHooks {
+                    (poni_core::agents::claude_hooks_json(&exe), "Paste into ~/.claude/settings.json")
+                } else {
+                    (poni_core::agents::codex_notify_line(&exe), "Paste into ~/.codex/config.toml")
+                };
+                self.st.cmd(Command::CopyText(text));
+                self.st.notify(Icon::Agent, palette::BLUE, "Copied", whereto, 5.0, None);
+            }
             ToggleSystemHistory => s.system_history = !s.system_history,
             ToggleLyrics => s.lyrics = !s.lyrics,
             TogglePronunciation => s.lyrics_pronunciation = !s.lyrics_pronunciation,
@@ -2764,6 +2830,11 @@ impl App {
         self.calendar_tick();
         self.set_quick_hotkey(self.st.settings.quick_add && self.selftest.is_none());
         self.script_tick();
+        // AI sessions: finished ones leave after a while; with the last one, the tab goes.
+        self.st.agents.sessions.prune(self.st.unix);
+        if self.st.page == PageKind::Agents && self.st.agents.sessions.list.is_empty() {
+            self.st.page = PageKind::ALL[0];
+        }
         // Calendar switched off: nothing it read is kept.
         if !self.st.calendar_on() && self.st.calendar.fetched_at.is_some() {
             let linked = self.st.calendar.linked;
@@ -3293,6 +3364,11 @@ impl App {
                     shell::open(&link);
                 }
             }
+            InlineAction::OpenAgent => {
+                if let Some(key) = st.agents.notice_for.take() {
+                    st.cmd(Command::OpenAgent(key));
+                }
+            }
             InlineAction::ShowAmount | InlineAction::StopAdzan => {}
         }
         let until = st.now + INLINE_DONE_S;
@@ -3582,6 +3658,7 @@ impl App {
                 Command::Collapse => self.collapse(),
                 Command::Play(s) => services::sound::play(s),
                 Command::OpenUrl(u) => shell::open(&u),
+                Command::OpenAgent(key) => self.open_agent(&key),
                 Command::Calendar(c) => match c {
                     CalendarCmd::UseLink => self.use_calendar_link(),
                     CalendarCmd::Refresh => {

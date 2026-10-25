@@ -80,6 +80,8 @@ pub enum Icon {
     Stop,
     /// Calendar add-on: a video camera (meetings and their calls).
     Video,
+    /// AI sessions (Claude Code, Codex): a sparkle.
+    Agent,
     /// Record (Oyenza Studio Recorder): a dot that fits inside `Circle`.
     Record,
 }
@@ -270,6 +272,11 @@ pub fn parts(icon: Icon) -> &'static [Part] {
             s("M5 6.5h8.5A1.5 1.5 0 0 1 15 8v8a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 16V8A1.5 1.5 0 0 1 5 6.5z"),
             s("M15 10.5l4.7-2.8a.5.5 0 0 1 .8.4v7.8a.5.5 0 0 1-.8.4L15 13.5"),
         ],
+        Agent => p![
+            s("M11 4.5l1.6 4.4a2 2 0 0 0 1.2 1.2L18.2 11.7l-4.4 1.6a2 2 0 0 0-1.2 1.2L11 18.9l-1.6-4.4a2 2 0 0 0-1.2-1.2L3.8 11.7l4.4-1.6a2 2 0 0 0 1.2-1.2z"),
+            s("M18.5 3v4"),
+            s("M16.5 5h4"),
+        ],
     }
 }
 
@@ -286,7 +293,7 @@ mod tests {
         Icon::Sliders, Icon::Open, Icon::Phone, Icon::Eye, Icon::MoneyIn, Icon::MoneyOut, Icon::Transfer, Icon::Card, Icon::Wallet,
         Icon::Unlink, Icon::Gear,
         Icon::Gauge, Icon::App, Icon::Windows, Icon::Addons, Icon::Moon, Icon::Stop, Icon::Script, Icon::Record,
-        Icon::Video,
+        Icon::Video, Icon::Agent,
     ];
 
     #[test]

@@ -10,6 +10,7 @@
 //! files, saving, …).
 
 pub mod addons;
+pub mod agents;
 pub mod calendar;
 pub mod clipboard;
 pub mod focus;
@@ -62,6 +63,8 @@ pub enum PageKind {
     Script,
     /// Only while signing in to Oyenza or signed in ([`tabs`]).
     Oyenza,
+    /// AI sessions (Claude Code, Codex), while any has told the island about itself ([`tabs`]).
+    Agents,
     /// Prayer times, while that add-on is on ([`tabs`]).
     Prayer,
     /// The "+" at the end of the tab row: features to switch on, each of
@@ -72,7 +75,7 @@ pub enum PageKind {
 }
 
 impl PageKind {
-    pub const ALL: [PageKind; 13] = [
+    pub const ALL: [PageKind; 14] = [
         PageKind::Media,
         PageKind::Focus,
         PageKind::Health,
@@ -83,6 +86,7 @@ impl PageKind {
         PageKind::System,
         PageKind::Script,
         PageKind::Oyenza,
+        PageKind::Agents,
         PageKind::Prayer,
         PageKind::Addons,
         PageKind::Settings,
@@ -100,6 +104,7 @@ impl PageKind {
             PageKind::System => "system",
             PageKind::Script => "script",
             PageKind::Oyenza => "oyenza",
+            PageKind::Agents => "agents",
             PageKind::Prayer => "prayer",
             PageKind::Addons => "addons",
             PageKind::Settings => "settings",
@@ -124,6 +129,7 @@ impl PageKind {
             PageKind::System => "System",
             PageKind::Script => "Script",
             PageKind::Oyenza => "Oyenza",
+            PageKind::Agents => "AI",
             PageKind::Prayer => "Prayer",
             PageKind::Addons => "Add-ons",
             PageKind::Settings => "Settings",
@@ -142,6 +148,7 @@ impl PageKind {
             PageKind::System => Icon::Gauge,
             PageKind::Script => Icon::Script,
             PageKind::Oyenza => Icon::Wallet,
+            PageKind::Agents => Icon::Agent,
             PageKind::Prayer => Icon::Moon,
             PageKind::Addons => Icon::Addons,
             PageKind::Settings => Icon::Gear,
@@ -173,6 +180,7 @@ pub fn tabs(st: &AppState) -> Vec<PageKind> {
         .into_iter()
         .filter(|p| match p {
             PageKind::Oyenza => st.oyenza.tab_visible(),
+            PageKind::Agents => !st.agents.sessions.list.is_empty(),
             PageKind::Prayer => st.prayer_on(),
             PageKind::Script => st.script_on(),
             p => p.tabbed(),
@@ -200,6 +208,7 @@ pub fn content_height(p: PageKind, st: &AppState) -> f32 {
         PageKind::System => system::height(st),
         PageKind::Script => script::height(st),
         PageKind::Oyenza => oyenza::height(st),
+        PageKind::Agents => agents::height(st),
         PageKind::Prayer => prayer::height(st),
         PageKind::Addons => addons::height(st),
         PageKind::Settings => settings::height(st),
@@ -330,6 +339,7 @@ pub(crate) fn draw_page(ui: &mut Ui, st: &mut AppState, area: Rect, page: PageKi
         PageKind::System => system::draw(ui, st, area),
         PageKind::Script => script::draw(ui, st, area),
         PageKind::Oyenza => oyenza::draw(ui, st, area),
+        PageKind::Agents => agents::draw(ui, st, area),
         PageKind::Prayer => prayer::draw(ui, st, area),
         PageKind::Addons => addons::draw(ui, st, area),
         PageKind::Settings => settings::draw(ui, st, area),
@@ -653,6 +663,17 @@ mod tests {
         assert!(content_height(PageKind::Prayer, &st) <= content_height(PageKind::Tasks, &st));
         st.addons.insert("sholat", poni_core::addons::Status::Downloading { done: 1, total: 2 });
         assert!(!tabs(&st).contains(&PageKind::Prayer));
+    }
+
+    #[test]
+    fn the_ai_tab_shows_only_while_a_session_is_known() {
+        use poni_core::agents::{Event, State, Tool};
+        let mut st = state();
+        assert!(!tabs(&st).contains(&PageKind::Agents));
+        let ev = Event { tool: Tool::Claude, session: "s".into(), state: State::Working, cwd: "/code/app".into(), message: String::new() };
+        st.agents.sessions.apply(ev, 0, None);
+        assert!(tabs(&st).contains(&PageKind::Agents));
+        assert!(content_height(PageKind::Agents, &st) <= content_height(PageKind::Tasks, &st));
     }
 
     #[test]

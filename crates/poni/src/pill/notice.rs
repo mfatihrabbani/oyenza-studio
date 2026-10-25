@@ -118,6 +118,7 @@ fn inline_done(st: &AppState, n: &Notice, a: InlineAction) -> bool {
         InlineAction::ShowAmount => n.reveal.is_none(),
         InlineAction::StopAdzan => !st.prayer.adzan,
         InlineAction::JoinMeeting => st.calendar.join.is_none(),
+        InlineAction::OpenAgent => st.agents.notice_for.is_none(),
     }
 }
 
@@ -160,6 +161,7 @@ fn draw_notice(ui: &mut Ui, st: &AppState, n: &Notice, body: Rect) {
             InlineAction::ShowAmount => ("Show", Icon::Eye, n.color),
             InlineAction::StopAdzan => ("Stop", Icon::Stop, n.color),
             InlineAction::JoinMeeting => ("Join", Icon::Open, n.color),
+            InlineAction::OpenAgent => ("Open", Icon::Open, n.color),
         };
         (a, label, icon, color, ui.pill_width(label, true, true).max(ACT_MIN_W))
     });

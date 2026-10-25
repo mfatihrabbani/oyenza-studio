@@ -145,6 +145,8 @@ pub enum InlineAction {
     ShowAmount,
     /// Stop the adzan (Prayer times).
     StopAdzan,
+    /// Bring the AI session the notice is about to the front (`AgentsState::notice_for`).
+    OpenAgent,
     /// Open the meeting's video call (`CalendarState::join`).
     JoinMeeting,
 }
@@ -435,6 +437,14 @@ pub struct CalendarState {
     pub join: Option<String>,
 }
 
+/// AI sessions that told the island about themselves (`services::agents`).
+#[derive(Clone, Debug, Default)]
+pub struct AgentsState {
+    pub sessions: poni_core::agents::Sessions,
+    /// The session the notice is about (taken when Open opens it).
+    pub notice_for: Option<String>,
+}
+
 impl PrayerState {
     pub fn site(&self) -> Option<Site> {
         self.place.as_ref().and_then(|p| p.site())
@@ -488,6 +498,7 @@ pub struct AppState {
     /// The Prayer times add-on, while it is on (its choices: `settings.prayer`).
     pub prayer: PrayerState,
     pub calendar: CalendarState,
+    pub agents: AgentsState,
     /// The Script page's reading (its script and pace are in `store.script`).
     pub script: poni_core::script::Reader,
     /// A message under the script until a time (mono seconds).
@@ -560,6 +571,7 @@ impl AppState {
             addons: BTreeMap::new(),
             prayer: PrayerState::default(),
             calendar: CalendarState::default(),
+            agents: AgentsState::default(),
             script: poni_core::script::Reader::default(),
             script_note: None,
             script_hidden: None,
@@ -574,7 +586,8 @@ impl AppState {
         }
         // Last open on the Script page, since switched off: open where a new
         // island does.
-        if st.page == PageKind::Script && !st.script_on() {
+        // The AI tab is empty at start, so it has no tab yet.
+        if (st.page == PageKind::Script && !st.script_on()) || st.page == PageKind::Agents {
             st.page = PageKind::ALL[0];
         }
         st
