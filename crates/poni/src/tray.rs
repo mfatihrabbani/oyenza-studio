@@ -55,6 +55,7 @@ pub enum MenuCmd {
     ToggleIdleStyle(IdleStyle),
     SetTheme(Theme),
     ToggleClipboard,
+    ToggleQuickAdd,
     ToggleSystemHistory,
     ToggleLyrics,
     TogglePronunciation,
@@ -125,6 +126,7 @@ pub fn menu_items(s: &Settings, pinned: bool, oyenza: &OyenzaLink, recorder: boo
         apple_music_menu(),
         oyenza_menu(s, oyenza),
         item("Clipboard history", MenuCmd::ToggleClipboard, s.clipboard_history),
+        item("Quick add from any app (Alt+Shift+Space)", MenuCmd::ToggleQuickAdd, s.quick_add),
         item("Keep System page history", MenuCmd::ToggleSystemHistory, s.system_history),
         item("Sounds", MenuCmd::ToggleSounds, s.sounds),
         MenuItem::Sub {

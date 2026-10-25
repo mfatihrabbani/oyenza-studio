@@ -1,0 +1,81 @@
+//! Commands in the Tasks page's field (`poni_core::quick`): what Enter will
+//! do, shown at the field's right while one is typed, and doing it. Plain
+//! words stay a task. Alt+Shift+Space opens the field from any app.
+
+use crate::commands::Command;
+use crate::icons::Icon;
+use crate::pages::PageKind;
+use crate::state::AppState;
+use poni_core::calendar::{self, Meeting};
+use poni_core::cliphist::preview;
+use poni_core::pomodoro::Phase;
+use poni_core::quick::{self, Quick};
+
+/// What Enter does with `q`, for the line beside the field.
+pub fn line(st: &AppState, q: &Quick) -> String {
+    match q {
+        Quick::Join => match join_target(st) {
+            Some(m) => format!("\u{21b5} Join {}", m.title),
+            None => "No meeting to join".into(),
+        },
+        Quick::Focus(_) if st.pomodoro.is_active() => "\u{21b5} Open Focus".into(),
+        Quick::Focus(min) => format!("\u{21b5} Focus {} min", min.unwrap_or(st.settings.pomodoro.focus_min)),
+        Quick::Clip(words) => match clip(st, words) {
+            Some(text) => format!("\u{21b5} Copy \u{201c}{}\u{201d}", preview(text, 28)),
+            None => "Not in the clipboard history".into(),
+        },
+        Quick::Calc(Some(v)) => format!("= {}  \u{21b5} Copy", quick::fmt_number(*v)),
+        Quick::Calc(None) => "= \u{2026}".into(),
+        Quick::Unknown => quick::HELP.into(),
+    }
+}
+
+/// Do `q`. Returns true when it did something (the field then clears and
+/// the island lets go of the keyboard).
+pub fn run(st: &mut AppState, q: &Quick) -> bool {
+    match q {
+        Quick::Join => {
+            let Some(link) = join_target(st).and_then(|m| m.link.clone()) else { return false };
+            st.cmd(Command::OpenUrl(link));
+        }
+        Quick::Focus(_) if st.pomodoro.is_active() => st.cmd(Command::SetPage(PageKind::Focus)),
+        Quick::Focus(min) => {
+            // A number sets the focus length from now on, as on the Focus page.
+            if let Some(m) = *min {
+                st.settings.pomodoro.focus_min = m;
+                st.pomodoro.cfg.focus_min = m;
+                st.cmd(Command::SaveSettings);
+            }
+            if st.pomodoro.phase != Phase::Focus {
+                st.pomodoro.set_phase(Phase::Focus);
+            }
+            st.pomodoro.start(st.now);
+        }
+        Quick::Clip(words) => {
+            let Some(text) = clip(st, words).map(str::to_string) else { return false };
+            st.notify(Icon::Copy, st.accent, "Copied", preview(&text, 40), 2.5, None);
+            st.cmd(Command::CopyText(text));
+        }
+        Quick::Calc(Some(v)) => {
+            let text = quick::fmt_number(*v);
+            st.notify(Icon::Copy, st.accent, "Copied", text.clone(), 2.5, None);
+            st.cmd(Command::CopyText(text));
+        }
+        Quick::Calc(None) | Quick::Unknown => return false,
+    }
+    true
+}
+
+/// The meeting `/join` opens: the first of today's left (one under way
+/// first) that has a call, while the Calendar add-on is on.
+fn join_target(st: &AppState) -> Option<&Meeting> {
+    if !st.calendar_on() {
+        return None;
+    }
+    let offset = poni_core::oyenza::offset_minutes(&st.local, st.unix);
+    calendar::today(&st.calendar.meetings, st.unix, offset).0.into_iter().find(|m| m.link.is_some())
+}
+
+fn clip<'a>(st: &'a AppState, words: &str) -> Option<&'a str> {
+    quick::find_clip(st.clip.iter().map(|c| c.text.as_str()), words)
+}

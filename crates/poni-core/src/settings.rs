@@ -113,6 +113,9 @@ pub struct Settings {
     /// with Join for its video call (`calendar`; the link itself is sealed
     /// on this PC, never in this file).
     pub meeting_remind_min: u32,
+    /// Alt+Shift+Space opens the Tasks page's field from any app: a task,
+    /// or a quick command (`quick`).
+    pub quick_add: bool,
 }
 
 /// What plays when a prayer's time comes.
@@ -180,6 +183,7 @@ impl Default for Settings {
             game_stats: false,
             game_peek: false,
             meeting_remind_min: 5,
+            quick_add: true,
         }
     }
 }

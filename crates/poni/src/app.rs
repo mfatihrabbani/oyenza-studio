@@ -66,6 +66,8 @@ const DROP_PEEK_EVERY_S: f64 = 30.0;
 const HOTKEY_PEEK: i32 = 1;
 /// Alt+Shift+S pauses and resumes the Script page's reading from any app.
 const HOTKEY_SCRIPT: i32 = 2;
+/// Alt+Shift+Space opens the Tasks page's field from any app (quick add).
+const HOTKEY_QUICK: i32 = 3;
 /// Raises that follow a new foreground window, and their spacing.
 const RAISE_REPEATS: u8 = 4;
 const RAISE_INTERVAL_MS: u32 = 500;
@@ -372,6 +374,7 @@ pub struct App {
     peek_hotkey: bool,
     /// Alt+Shift+S is registered (only while the Script page can read).
     script_hotkey: bool,
+    quick_hotkey: bool,
     /// The Script page has asked for the island to stay out of screen capture.
     script_excluded: bool,
     /// A reading held the island open at the last tick.
@@ -555,6 +558,7 @@ impl App {
             game_hidden: false,
             peek_hotkey: false,
             script_hotkey: false,
+            quick_hotkey: false,
             script_excluded: false,
             script_held: false,
             script_shown: false,
@@ -629,6 +633,7 @@ impl App {
         self.frames = None;
         self.set_peek_hotkey(false);
         self.set_script_hotkey(false);
+        self.set_quick_hotkey(false);
         self.glass.stop(self.hwnd, &mut self.gfx);
         if let Some(p) = self.phone.take() {
             p.stop();
@@ -1121,6 +1126,11 @@ impl App {
             }
             WM_HOTKEY if wp.0 == HOTKEY_PEEK as usize => {
                 self.toggle_readout();
+                self.request_frame();
+                Some(LRESULT(0))
+            }
+            WM_HOTKEY if wp.0 == HOTKEY_QUICK as usize => {
+                self.quick_add();
                 self.request_frame();
                 Some(LRESULT(0))
             }
@@ -1741,6 +1751,7 @@ impl App {
             ToggleIdleStyle(style) => s.idle_style = style,
             SetTheme(theme) => s.theme = theme,
             ToggleClipboard => s.clipboard_history = !s.clipboard_history,
+            ToggleQuickAdd => s.quick_add = !s.quick_add,
             ToggleSystemHistory => s.system_history = !s.system_history,
             ToggleLyrics => s.lyrics = !s.lyrics,
             TogglePronunciation => s.lyrics_pronunciation = !s.lyrics_pronunciation,
@@ -2340,6 +2351,51 @@ impl App {
         }
     }
 
+    /// Alt+Shift+Space, while quick add is on (the tray's switch).
+    fn set_quick_hotkey(&mut self, on: bool) {
+        if on == self.quick_hotkey {
+            return;
+        }
+        unsafe {
+            if on {
+                match RegisterHotKey(self.helper, HOTKEY_QUICK, MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, u32::from(b' ')) {
+                    Ok(()) => self.quick_hotkey = true,
+                    Err(e) => {
+                        pwarn!("quick add: Alt+Shift+Space is taken ({e})");
+                        // Asked once: the switch stays on, and the next start tries again.
+                        self.quick_hotkey = true;
+                    }
+                }
+            } else {
+                let _ = UnregisterHotKey(self.helper, HOTKEY_QUICK);
+                self.quick_hotkey = false;
+            }
+        }
+    }
+
+    /// Alt+Shift+Space: the island opens on Tasks with its field ready to
+    /// type in (a task, or a quick command); pressed again while the field
+    /// waits, the island lets go and closes.
+    fn quick_add(&mut self) {
+        self.refresh_time();
+        let field = wid(pages::tasks::INPUT_ID);
+        if self.expanded && self.text_focus && self.input.focused == Some(field) {
+            self.blur_text();
+            self.collapse();
+            return;
+        }
+        if self.fullscreen_hidden {
+            return;
+        }
+        self.set_page(PageKind::Tasks);
+        self.st.notice = None;
+        self.st.hud = None;
+        self.expand();
+        self.input.focused = Some(field);
+        self.input.caret = self.st.ui.task_input.chars().count();
+        self.focus_text();
+    }
+
     /// Alt+Shift+S belongs to Poni only while the Script page can read.
     fn set_script_hotkey(&mut self, on: bool) {
         if on == self.script_hotkey {
@@ -2706,6 +2762,7 @@ impl App {
         }
         self.prayer_tick();
         self.calendar_tick();
+        self.set_quick_hotkey(self.st.settings.quick_add && self.selftest.is_none());
         self.script_tick();
         // Calendar switched off: nothing it read is kept.
         if !self.st.calendar_on() && self.st.calendar.fetched_at.is_some() {

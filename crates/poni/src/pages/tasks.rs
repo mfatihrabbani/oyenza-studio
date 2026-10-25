@@ -1,7 +1,9 @@
 //! Tasks page: a quick to-do list.
 //!
 //! The input is the list's first row (a plus in the checkbox column; Enter
-//! adds and keeps focus for rapid entry, Esc leaves the field), the tasks
+//! adds and keeps focus for rapid entry, Esc leaves the field; Alt+Shift+Space
+//! opens it from any app, and a few commands typed there do something else,
+//! `quick`), the tasks
 //! below with circle checkboxes, hover-only delete and smooth wheel scrolling
 //! with fading edges, and a footer with today's progress and "Clear done".
 //! Delete and "Clear done" can be undone for a few seconds.
@@ -22,6 +24,8 @@ use std::cell::Cell;
 use std::collections::HashMap;
 
 const HEIGHT: f32 = 200.0;
+/// The field's widget id (Alt+Shift+Space focuses it).
+pub const INPUT_ID: &str = "tasks.input";
 const INPUT_H: f32 = 34.0;
 const ROW_H: f32 = 31.0;
 /// List viewport, relative to the page top: exactly four rows.
@@ -133,9 +137,25 @@ pub fn draw(ui: &mut Ui, st: &mut AppState, area: Rect) {
     let input_r = Rect::new(area.x, area.y, area.w, INPUT_H);
     let placeholder = if full { "Task list is full" } else { "Add a task, Enter to save" };
     let accent = st.accent;
-    let resp = ui.text_input_row(wid("tasks.input"), input_r, &mut st.ui.task_input, placeholder, MAX_TASK_LEN, accent, Some(Icon::Plus));
+    let resp = ui.text_input_row(wid(INPUT_ID), input_r, &mut st.ui.task_input, placeholder, MAX_TASK_LEN, accent, Some(Icon::Plus));
+    // A command instead of a task: what Enter will do, at the field's right.
+    let quick = poni_core::quick::parse(&st.ui.task_input);
+    if let Some(q) = &quick {
+        let line = super::quick::line(st, q);
+        let r = Rect::new(input_r.x + input_r.w * 0.4, input_r.y, input_r.w * 0.6 - 12.0, input_r.h);
+        ui.c.text(&line, r, &TextStyle::footnote().color(accent).right());
+    }
     if resp.submitted {
-        submit(ui, st, &mut anim, day_start);
+        match quick {
+            Some(q) => {
+                if super::quick::run(st, &q) {
+                    st.ui.task_input.clear();
+                    ui.input.caret = 0;
+                    st.cmd(crate::commands::Command::BlurText);
+                }
+            }
+            None => submit(ui, st, &mut anim, day_start),
+        }
     }
 
     // ---- List.

@@ -17,6 +17,7 @@ pub mod health;
 pub mod media;
 pub mod oyenza;
 pub mod prayer;
+pub mod quick;
 pub mod script;
 pub mod settings;
 pub mod shelf;

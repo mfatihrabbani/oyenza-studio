@@ -295,6 +295,19 @@ It reads your calendar through its secret iCal address, so there's nothing to si
 
 Oyenza Studio fetches the file every 15 minutes while the add-on is on and you're at the PC (not while it's locked, the display is off or battery saver is on), and only reads it. The link is stored encrypted for your Windows account (`%LOCALAPPDATA%\Poni\calendar-link.bin`) and cleared from the clipboard. Anyone with the link can read your calendar, so if it ever leaks, reset it in the same Google Calendar settings and connect the new one. **Remove** on the Today page deletes it.
 
+### Quick add
+
+Press **Alt+Shift+Space** in any app: the island opens on **Tasks** with its field ready. Type a task and press Enter to add it, as on the page (the field stays open for the next one); Esc or Alt+Shift+Space again closes it. A few commands typed there do something else, and the field shows what Enter will do before you press it:
+
+| Type | Enter does |
+|---|---|
+| `/join` | Opens the call of the meeting under way or coming up today (Calendar add-on) |
+| `/focus`, `/focus 50` | Starts a focus session; a number sets its length |
+| `/clip invoice` | Copies the newest clipboard item with those words |
+| `= 12*4500` | Works it out and copies the result (`+ - * / x :`, brackets, `%`) |
+
+Anything else is a task. **Quick add from any app** in the tray menu turns the shortcut off.
+
 ### Phone drop
 
 Send photos and files from your phone to the Shelf, or save Shelf files on your phone, over your own Wi-Fi. Nothing to install on the phone, and it works with iPhones and Android phones alike.
