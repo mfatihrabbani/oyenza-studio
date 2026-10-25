@@ -281,6 +281,20 @@ Oyenza Studio checks the token with Apple and says whether it worked. It stores 
 
 With a token saved, Oyenza Studio sends each song's title and artist to Apple to find its lyrics. It uses the Apple Music web player's own API, which Apple doesn't publish for other apps, so it can stop working when Apple changes its site. LRCLIB keeps working either way.
 
+### Meeting reminders
+
+A few minutes before each meeting on your Google Calendar, the island shows it, counting down ("In 5 min · 10:00"), with **Join** for its Google Meet, Zoom, Teams or Webex call. Join opens the call in your browser, where Meet's own transcripts and notes work as usual. On Windows.
+
+It reads your calendar through its secret iCal address, so there's nothing to sign in to:
+
+1. Open [Google Calendar](https://calendar.google.com) on the web, then **Settings** → your calendar under **Settings for my calendars** → **Integrate calendar**.
+2. Copy **Secret address in iCal format**.
+3. Right-click the island (or the tray icon) → **Meeting reminders** → **Use calendar link from clipboard**.
+
+The island says whether the link worked and names your next meeting. **Remind me** in the same menu picks 1, 5 or 10 minutes before; the reminder chimes when Sounds is on. All-day events, cancelled meetings and ones you declined are left out. Any other calendar that gives an `.ics` link (Outlook, iCloud) works the same way.
+
+Oyenza Studio fetches the file every 15 minutes while you're at the PC (not while it's locked, the display is off or battery saver is on), and only reads it. The link is stored encrypted for your Windows account (`%LOCALAPPDATA%\Poni\calendar-link.bin`) and cleared from the clipboard. Anyone with the link can read your calendar, so if it ever leaks, reset it in the same Google Calendar settings and copy the new one. **Remove calendar** turns this off.
+
 ### Phone drop
 
 Send photos and files from your phone to the Shelf, or save Shelf files on your phone, over your own Wi-Fi. Nothing to install on the phone, and it works with iPhones and Android phones alike.

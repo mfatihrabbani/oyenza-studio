@@ -1685,8 +1685,9 @@ impl App {
         }
         match a {
             InlineAction::StartFocus => st.pomodoro.start(st.now),
-            // The Mac app never plays the adzan (no Prayer times there yet).
-            InlineAction::ShowAmount | InlineAction::StopAdzan => {}
+            // The Mac app never plays the adzan (no Prayer times there yet),
+            // and has no calendar reminders yet.
+            InlineAction::ShowAmount | InlineAction::StopAdzan | InlineAction::JoinMeeting => {}
         }
         let until = st.now + INLINE_DONE_S;
         if let Some(n) = st.notice.as_mut() {

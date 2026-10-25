@@ -8,6 +8,7 @@ pub mod applemusic_ui;
 pub mod audio;
 pub mod backdrop;
 pub mod bluetooth;
+pub mod calendar;
 pub mod clipboard;
 pub mod frames;
 pub mod fullscreen;

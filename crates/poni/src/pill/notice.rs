@@ -117,6 +117,7 @@ fn inline_done(st: &AppState, n: &Notice, a: InlineAction) -> bool {
         // Oyenza: the sum is in place once Show took it.
         InlineAction::ShowAmount => n.reveal.is_none(),
         InlineAction::StopAdzan => !st.prayer.adzan,
+        InlineAction::JoinMeeting => st.calendar.join.is_none(),
     }
 }
 
@@ -158,6 +159,7 @@ fn draw_notice(ui: &mut Ui, st: &AppState, n: &Notice, body: Rect) {
             InlineAction::StartFocus => ("Start", Icon::Play, phase_color(st.pomodoro.phase)),
             InlineAction::ShowAmount => ("Show", Icon::Eye, n.color),
             InlineAction::StopAdzan => ("Stop", Icon::Stop, n.color),
+            InlineAction::JoinMeeting => ("Join", Icon::Open, n.color),
         };
         (a, label, icon, color, ui.pill_width(label, true, true).max(ACT_MIN_W))
     });

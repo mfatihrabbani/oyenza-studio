@@ -109,6 +109,10 @@ pub struct Settings {
     /// front. Its own name: the corner test build wrote `game_readout`
     /// ("peek" as its default) into the files of the people who tried it.
     pub game_peek: bool,
+    /// Minutes before a meeting on the linked calendar the island shows it,
+    /// with Join for its video call (`calendar`; the link itself is sealed
+    /// on this PC, never in this file).
+    pub meeting_remind_min: u32,
 }
 
 /// What plays when a prayer's time comes.
@@ -175,6 +179,7 @@ impl Default for Settings {
             prayer: PrayerSettings::default(),
             game_stats: false,
             game_peek: false,
+            meeting_remind_min: 5,
         }
     }
 }
@@ -242,6 +247,7 @@ impl Settings {
         p.long_break_min = p.long_break_min.clamp(1, 120);
         p.long_every = p.long_every.min(12);
         self.prayer.remind_before_min = self.prayer.remind_before_min.min(60);
+        self.meeting_remind_min = self.meeting_remind_min.clamp(1, 60);
         self
     }
 }

@@ -689,6 +689,8 @@ fn inline_done(st: &AppState, a: InlineAction) -> bool {
         // Oyenza: the sum is in place once Show took it.
         InlineAction::ShowAmount => st.notice.as_ref().is_some_and(|n| n.reveal.is_none()),
         InlineAction::StopAdzan => !st.prayer.adzan,
+        // The calendar: the call opened (Join takes its link).
+        InlineAction::JoinMeeting => st.calendar.join.is_none(),
     }
 }
 
@@ -706,6 +708,7 @@ fn draw_notice(ui: &mut Ui, st: &mut AppState, body: Rect) {
             InlineAction::StartFocus => ("Start".to_string(), Icon::Play, phase_color(st.pomodoro.phase)),
             InlineAction::ShowAmount => ("Show".to_string(), Icon::Eye, n.color),
             InlineAction::StopAdzan => ("Stop".to_string(), Icon::Stop, n.color),
+            InlineAction::JoinMeeting => ("Join".to_string(), Icon::Open, n.color),
         };
         let w = ui.pill_width(&label, true, true).max(76.0);
         let r = Rect::new(body.right() - 16.0 - w, cy - PILL_SMALL / 2.0, w, PILL_SMALL);

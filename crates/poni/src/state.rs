@@ -145,6 +145,8 @@ pub enum InlineAction {
     ShowAmount,
     /// Stop the adzan (Prayer times).
     StopAdzan,
+    /// Open the meeting's video call (`CalendarState::join`).
+    JoinMeeting,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -404,6 +406,31 @@ pub struct PrayerState {
     pub clock_shift: i64,
 }
 
+/// Meetings from the calendar link saved on this PC (`services::calendar`).
+#[derive(Clone, Debug, Default)]
+pub struct CalendarState {
+    /// A link is saved: the file is fetched every
+    /// [`poni_core::calendar::FETCH_EVERY_S`] while someone is at the PC.
+    pub linked: bool,
+    /// The meetings of the next day and a half, soonest first.
+    pub meetings: Vec<poni_core::calendar::Meeting>,
+    /// When the file last came (UTC seconds), and a fetch under way.
+    pub fetched_at: Option<i64>,
+    pub fetching: bool,
+    /// Fetches that failed in a row (the next waits longer).
+    pub fails: u32,
+    /// When the last fetch was asked for (UTC seconds), for the wait after a failure.
+    pub tried_at: Option<i64>,
+    /// The link was just saved: the island says how the first fetch went.
+    pub announce: bool,
+    /// Meetings whose notice already showed (`Meeting::key`).
+    pub reminded: Vec<String>,
+    /// The meeting the notice is about, and its call's link for Join
+    /// (taken when Join opens it).
+    pub notice_for: Option<String>,
+    pub join: Option<String>,
+}
+
 impl PrayerState {
     pub fn site(&self) -> Option<Site> {
         self.place.as_ref().and_then(|p| p.site())
@@ -456,6 +483,7 @@ pub struct AppState {
     pub addons: BTreeMap<&'static str, AddonStatus>,
     /// The Prayer times add-on, while it is on (its choices: `settings.prayer`).
     pub prayer: PrayerState,
+    pub calendar: CalendarState,
     /// The Script page's reading (its script and pace are in `store.script`).
     pub script: poni_core::script::Reader,
     /// A message under the script until a time (mono seconds).
@@ -527,6 +555,7 @@ impl AppState {
             oyenza: OyenzaState::default(),
             addons: BTreeMap::new(),
             prayer: PrayerState::default(),
+            calendar: CalendarState::default(),
             script: poni_core::script::Reader::default(),
             script_note: None,
             script_hidden: None,

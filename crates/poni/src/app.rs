@@ -4,7 +4,7 @@
 use crate::activities::{self, Mode};
 use crate::clock;
 use crate::commands::{Command, MediaCmd, OyenzaCmd, PairCmd, PhoneCmd};
-use crate::events::{AppEvent, AppleMusicStatus, EventSink, OyenzaEvent, SendHwnd, WM_APP_APPBAR, WM_APP_EVENT, WM_APP_FRAME, WM_APP_TRAY};
+use crate::events::{AppEvent, AppleMusicStatus, CalendarEvent, EventSink, OyenzaEvent, SendHwnd, WM_APP_APPBAR, WM_APP_EVENT, WM_APP_FRAME, WM_APP_TRAY};
 use crate::gfx::{px_rect, px_union, scale_about, union_rect, Canvas, Gfx, HitMask};
 use crate::icons::Icon;
 use crate::island::{Geom, Island, SHOULDER};
@@ -77,6 +77,8 @@ const WTS_SESSION_UNLOCK_: usize = 8;
 
 /// Steps for copying the Apple Music token (README).
 const APPLE_MUSIC_HELP_URL: &str = "https://github.com/lucacadalora/oyenza-studio#apple-music-lyrics";
+/// Where Google Calendar's "Secret address in iCal format" is (Google's help).
+const CALENDAR_HELP_URL: &str = "https://support.google.com/calendar/answer/37648";
 /// Phone drop closes itself after this long without a request from a phone.
 const PHONE_IDLE_S: f64 = 600.0;
 
@@ -493,6 +495,7 @@ impl App {
         st.now = clock::mono();
         st.local = clock::local_now();
         st.unix = clock::unix_now();
+        st.calendar.linked = paths::calendar_link_path().exists();
         st.accent = theme_accent(st.settings.theme);
         let mode = Mode::Idle;
         let mut island = Island::new(activities::geom(&mode, &st));
@@ -1262,6 +1265,163 @@ impl App {
         self.st.notify(Icon::Lyrics, palette::BLUE, "Checking the Apple Music token", "One moment", 4.0, None);
     }
 
+    // ------------------------------------------------------------ calendar
+
+    /// Save the calendar's secret iCal link copied from Google Calendar
+    /// (sealed with DPAPI), keep it off the clipboard and out of the
+    /// clipboard history, and fetch the meetings.
+    fn use_calendar_link(&mut self) {
+        let text = services::clipboard::read_text(self.hwnd).unwrap_or_default();
+        let Some(link) = poni_core::calendar::clean_link(&text) else {
+            self.st.notify(Icon::Calendar, palette::ORANGE, "No calendar link copied", "Copy the secret address in iCal format", 6.0, None);
+            return;
+        };
+        if let Err(e) = services::secret::save(&paths::calendar_link_path(), &link) {
+            pwarn!("calendar: cannot save the link ({e})");
+            self.st.notify(Icon::Calendar, palette::ORANGE, "Couldn't save the link", "Details in poni.log", 5.0, None);
+            return;
+        }
+        pinfo!("calendar: link saved");
+        self.forget_clipboard_text(text.trim());
+        self.st.calendar = crate::state::CalendarState { linked: true, announce: true, ..Default::default() };
+        self.fetch_calendar();
+        self.st.notify(Icon::Calendar, palette::BLUE, "Checking the calendar", "One moment", 4.0, None);
+    }
+
+    fn forget_calendar_link(&mut self) {
+        if let Err(e) = services::secret::delete(&paths::calendar_link_path()) {
+            pwarn!("calendar: cannot remove the link ({e})");
+            self.st.notify(Icon::Calendar, palette::ORANGE, "Couldn't remove the link", "Details in poni.log", 5.0, None);
+            return;
+        }
+        pinfo!("calendar: link removed");
+        self.st.calendar = Default::default();
+        self.st.notify(Icon::Calendar, palette::BLUE, "Meeting reminders off", "The calendar link is gone from this PC", 4.0, None);
+    }
+
+    fn fetch_calendar(&mut self) {
+        let c = &mut self.st.calendar;
+        if !c.linked || c.fetching {
+            return;
+        }
+        c.fetching = true;
+        c.tried_at = Some(self.st.unix);
+        services::calendar::fetch(self.sink.clone(), self.st.unix, oyenza::offset_minutes(&self.st.local, self.st.unix));
+    }
+
+    fn on_calendar(&mut self, ev: CalendarEvent) {
+        self.refresh_time();
+        let unix = self.st.unix;
+        let c = &mut self.st.calendar;
+        c.fetching = false;
+        if !c.linked {
+            // Removed while the fetch ran.
+            return;
+        }
+        let announce = std::mem::take(&mut c.announce);
+        let failed = match ev {
+            CalendarEvent::Meetings(meetings) => {
+                // Reminders already shown stay shown while their meeting is listed.
+                c.reminded.retain(|k| meetings.iter().any(|m| &m.key == k));
+                c.meetings = meetings;
+                c.fetched_at = Some(unix);
+                c.fails = 0;
+                pinfo!("calendar: {} meetings ahead", c.meetings.len());
+                if announce {
+                    let offset = oyenza::offset_minutes(&self.st.local, unix);
+                    let subtitle = match self.st.calendar.meetings.iter().find(|m| m.start >= unix) {
+                        Some(m) => {
+                            let when = poni_core::calendar::notice_subtitle(m, unix, offset, self.st.settings.use_24h);
+                            let clock = when.rsplit(" \u{b7} ").next().unwrap_or("").to_string();
+                            format!("Next: {} at {clock}", m.title)
+                        }
+                        None => "No meetings in the next day and a half".to_string(),
+                    };
+                    self.st.notify(Icon::Calendar, palette::GREEN, "Meeting reminders on", subtitle, 6.0, None);
+                }
+                None
+            }
+            CalendarEvent::Refused(status) => {
+                pwarn!("calendar: the link answered {status}, not with a calendar");
+                c.fails += 1;
+                announce.then_some(("Calendar link not accepted", "Copy the secret address again"))
+            }
+            CalendarEvent::Failed(why) => {
+                pwarn!("calendar: fetch failed ({why})");
+                c.fails += 1;
+                announce.then_some(("Can't reach the calendar", "Link saved; trying again soon"))
+            }
+        };
+        if let Some((title, subtitle)) = failed {
+            self.st.notify(Icon::Calendar, palette::ORANGE, title, subtitle, 6.0, None);
+        }
+    }
+
+    /// Each frame (and each minute): fetch the calendar when it's time, show
+    /// a meeting's notice when its reminder is due, and keep the notice's
+    /// "In 4 min" current. Fetches rest while nobody is at the PC and on
+    /// battery saver; reminders from the meetings already read still come.
+    fn calendar_tick(&mut self) {
+        if !self.st.calendar.linked || self.selftest.is_some() {
+            return;
+        }
+        let unix = self.st.unix;
+        let c = &self.st.calendar;
+        let last = if c.fails > 0 { c.tried_at } else { c.fetched_at };
+        let wait = poni_core::calendar::retry_after_s(c.fails);
+        let away = self.locked || self.display_off || self.st.power.saver;
+        // `t > unix`: the clock went back; fetch rather than wait for it.
+        if !c.fetching && !away && last.is_none_or(|t| unix - t >= wait || t > unix) {
+            self.fetch_calendar();
+        }
+
+        let before = self.st.settings.meeting_remind_min;
+        let c = &self.st.calendar;
+        let due = poni_core::calendar::to_remind(&c.meetings, unix, before, &c.reminded).cloned();
+        if let Some(m) = due {
+            self.meeting_notice(&m);
+        }
+
+        // The notice counts down; once it's gone, Join goes with it.
+        let offset = oyenza::offset_minutes(&self.st.local, unix);
+        let use_24h = self.st.settings.use_24h;
+        let c = &mut self.st.calendar;
+        let Some(key) = c.notice_for.clone() else { return };
+        let meeting = c.meetings.iter().find(|m| m.key == key);
+        match (self.st.notice.as_mut(), meeting) {
+            (Some(n), Some(m)) if n.icon == Icon::Calendar && n.title == m.title => {
+                let line = poni_core::calendar::notice_subtitle(m, unix, offset, use_24h);
+                if n.subtitle != line {
+                    n.subtitle = line;
+                }
+            }
+            (None, _) => {
+                c.notice_for = None;
+                c.join = None;
+            }
+            _ => {}
+        }
+    }
+
+    /// A meeting is a few minutes away: a notice with its time and Join for
+    /// its call, until shortly after it starts.
+    fn meeting_notice(&mut self, m: &poni_core::calendar::Meeting) {
+        let unix = self.st.unix;
+        let offset = oyenza::offset_minutes(&self.st.local, unix);
+        let subtitle = poni_core::calendar::notice_subtitle(m, unix, offset, self.st.settings.use_24h);
+        let c = &mut self.st.calendar;
+        c.reminded.push(m.key.clone());
+        c.notice_for = Some(m.key.clone());
+        c.join = m.link.clone();
+        let secs = (m.start + poni_core::calendar::START_GRACE_S - unix).max(30) as f64;
+        self.st.notify(Icon::Calendar, self.st.accent, m.title.clone(), subtitle, secs, None);
+        if m.link.is_some() {
+            self.st.set_notice_inline(InlineAction::JoinMeeting);
+        }
+        self.st.chime();
+        pinfo!("calendar: reminder {} min before a meeting{}", poni_core::calendar::minutes_left(m, unix), if m.link.is_some() { " with a call link" } else { "" });
+    }
+
     fn forget_apple_music_token(&mut self) {
         if let Err(e) = services::secret::delete(&paths::apple_music_token_path()) {
             pwarn!("apple music: cannot remove the token ({e})");
@@ -1636,6 +1796,14 @@ impl App {
             AppleMusicToken => self.use_apple_music_token(),
             AppleMusicHelp => shell::open(APPLE_MUSIC_HELP_URL),
             AppleMusicForget => self.forget_apple_music_token(),
+            CalendarLink => self.use_calendar_link(),
+            CalendarHelp => shell::open(CALENDAR_HELP_URL),
+            CalendarRefresh => {
+                self.st.calendar.announce = true;
+                self.fetch_calendar();
+            }
+            CalendarForget => self.forget_calendar_link(),
+            MeetingRemind(min) => s.meeting_remind_min = min,
             OyenzaSignIn => self.oyenza(OyenzaCmd::SignIn),
             OyenzaCancel => self.oyenza(OyenzaCmd::Cancel),
             OyenzaDisconnect => self.oyenza(OyenzaCmd::Disconnect),
@@ -1878,6 +2046,7 @@ impl App {
             }
             AppEvent::Located(found) => self.on_located(found),
             AppEvent::AdzanEnded => self.adzan_ended(),
+            AppEvent::Calendar(ev) => self.on_calendar(ev),
             AppEvent::Log(s) => pinfo!("{s}"),
         }
         if let Some(before) = media_before {
@@ -2545,6 +2714,7 @@ impl App {
             self.st.page = PageKind::ALL[0];
         }
         self.prayer_tick();
+        self.calendar_tick();
         self.script_tick();
         // Prayer times switched off: its tab is gone.
         if self.st.page == PageKind::Prayer && !self.st.prayer_on() {
@@ -3064,6 +3234,11 @@ impl App {
         }
         match a {
             InlineAction::StartFocus => st.pomodoro.start(st.now),
+            InlineAction::JoinMeeting => {
+                if let Some(link) = st.calendar.join.take() {
+                    shell::open(&link);
+                }
+            }
             InlineAction::ShowAmount | InlineAction::StopAdzan => {}
         }
         let until = st.now + INLINE_DONE_S;

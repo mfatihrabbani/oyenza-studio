@@ -110,6 +110,18 @@ pub enum OyenzaEvent {
     Disconnected { by_server: bool },
 }
 
+/// What a calendar fetch found (`services::calendar`).
+#[derive(Clone, Debug)]
+pub enum CalendarEvent {
+    /// The meetings ahead, soonest first.
+    Meetings(Vec<poni_core::calendar::Meeting>),
+    /// The address answered, but not with a calendar (wrong link, or the
+    /// secret address was reset): the HTTP status.
+    Refused(u16),
+    /// Couldn't fetch it this time (offline, timed out).
+    Failed(String),
+}
+
 pub enum AppEvent {
     /// The current media session changed (None = nothing playing / no session).
     Media(Option<MediaSession>),
@@ -155,6 +167,7 @@ pub enum AppEvent {
     Located(crate::services::location::Located),
     /// The adzan finished playing, or couldn't play on.
     AdzanEnded,
+    Calendar(CalendarEvent),
     /// Start with Windows is on (true) or off, read for the Settings page.
     Autostart(bool),
     /// Free-form log line from a service thread.

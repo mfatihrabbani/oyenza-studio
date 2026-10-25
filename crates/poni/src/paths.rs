@@ -48,6 +48,12 @@ pub fn apple_music_token_path() -> PathBuf {
     cache_dir().join("apple-music-token.bin")
 }
 
+/// The calendar's secret iCal link (`services::calendar`), sealed like the
+/// Apple Music token: anyone with it can read the calendar.
+pub fn calendar_link_path() -> PathBuf {
+    cache_dir().join("calendar-link.bin")
+}
+
 /// The Apple Music web player's (public) developer token, cached until it expires.
 pub fn apple_music_web_token_path() -> PathBuf {
     cache_dir().join("apple-music-web.json")
