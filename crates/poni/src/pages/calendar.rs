@@ -62,8 +62,8 @@ pub fn draw_panel(ui: &mut Ui, st: &mut AppState, r: Rect, card: Option<(Rect, f
     let now = st.unix;
     let offset = poni_core::oyenza::offset_minutes(&st.local, now);
     let use_24h = st.settings.use_24h;
-    let (rest, next) = model::today(&st.calendar.meetings, now, offset);
     head(ui, st, Rect::new(inner.x, inner.y, inner.w, HEAD_H));
+    let (rest, next) = model::today(&st.calendar.meetings, now, offset);
     let rows = Rect::new(inner.x, inner.y + HEAD_H, inner.w, foot.y - inner.y - HEAD_H);
     if rest.is_empty() {
         let hint = match next {
