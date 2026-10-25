@@ -2,12 +2,13 @@
 //!
 //! Left: the date (weekday, big day number, month/year, ISO week) and a
 //! compact Monday-first month calendar. Right: a 2×2 grid of stat tiles with
-//! rings (CPU, memory, disk, battery or uptime). The header leaves the date
+//! rings (CPU, memory, disk, battery or uptime), or today's meetings while
+//! the Calendar add-on is on (`calendar::draw_panel`). The header leaves the date
 //! out on this page, so the page always shows it (the calendar title carries
 //! it when the big date block doesn't fit).
 //!
-//! Stats are sampled once a second by the app while this page is open; the
-//! page itself never asks for continuous frames.
+//! Stats are sampled once a second by the app while this page shows the
+//! tiles; the page itself never asks for continuous frames.
 
 use crate::commands::Command;
 use crate::gfx::{TextStyle, Weight};
@@ -66,7 +67,11 @@ pub fn draw(ui: &mut Ui, st: &mut AppState, area: Rect) {
     let tiles = Rect::new(x, area.y, (area.right() - x).max(0.0), area.h);
     // The bottom-right tile shares the Pill card's corner.
     let card = super::clipboard::pill_card(st, area);
-    draw_tiles(ui, st, tiles, card);
+    if st.calendar_on() {
+        super::calendar::draw_panel(ui, st, tiles, card);
+    } else {
+        draw_tiles(ui, st, tiles, card);
+    }
 }
 
 // ------------------------------------------------------------------ date

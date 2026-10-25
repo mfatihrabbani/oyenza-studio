@@ -574,7 +574,7 @@ impl AppState {
         }
         // Last open on the Script page, since switched off: open where a new
         // island does.
-        if (st.page == PageKind::Script && !st.script_on()) || (st.page == PageKind::Calendar && !st.calendar_on()) {
+        if st.page == PageKind::Script && !st.script_on() {
             st.page = PageKind::ALL[0];
         }
         st
@@ -590,8 +590,8 @@ impl AppState {
         self.addon(poni_core::addons::SCRIPT_READER.id) == AddonStatus::Ready
     }
 
-    /// The Calendar add-on is on: its tab shows, and with a link saved the
-    /// meetings are fetched and reminded.
+    /// The Calendar add-on is on: the Today page shows the meetings in the
+    /// stat tiles' place, and with a link saved they are fetched and reminded.
     pub fn calendar_on(&self) -> bool {
         self.addon(poni_core::addons::CALENDAR.id) == AddonStatus::Ready
     }

@@ -117,13 +117,14 @@ pub const SCRIPT_READER: Addon = Addon {
     files: &[],
 };
 
-/// Calendar: today's meetings from the calendar's secret iCal link, and a
-/// notice with Join a few minutes before each (`calendar`). Its code is in
-/// the app; off, there is no Calendar tab, no fetch and no reminder.
+/// Calendar: today's meetings from the calendar's secret iCal link on the
+/// Today page (in the stat tiles' place), and a notice with Join a few
+/// minutes before each (`calendar`). Its code is in the app; off, Today
+/// shows its tiles and nothing is fetched or reminded.
 pub const CALENDAR: Addon = Addon {
     id: "calendar",
     title: "Calendar",
-    blurb: "Today's meetings, and a reminder with Join before each one.",
+    blurb: "Today's meetings on the Today page, and Join before each one.",
     mac_blurb: None,
     tag: "",
     files: &[],

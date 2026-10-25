@@ -1271,7 +1271,7 @@ impl App {
     fn use_calendar_link(&mut self) {
         let text = services::clipboard::read_text(self.hwnd).unwrap_or_default();
         let Some(link) = poni_core::calendar::clean_link(&text) else {
-            self.st.calendar.note = Some(("No calendar link on the clipboard: copy the secret address in iCal format", self.st.now + 6.0));
+            self.st.calendar.note = Some(("No link copied: copy the secret address first", self.st.now + 6.0));
             return;
         };
         if let Err(e) = services::secret::save(&paths::calendar_link_path(), &link) {
@@ -1413,7 +1413,7 @@ impl App {
         c.notice_for = Some(m.key.clone());
         c.join = m.link.clone();
         let secs = (m.start + poni_core::calendar::START_GRACE_S - unix).max(30) as f64;
-        self.st.notify(Icon::Calendar, self.st.accent, m.title.clone(), subtitle, secs, Some(NoticeAction::OpenPage(PageKind::Calendar)));
+        self.st.notify(Icon::Calendar, self.st.accent, m.title.clone(), subtitle, secs, Some(NoticeAction::OpenPage(PageKind::Today)));
         if m.link.is_some() {
             self.st.set_notice_inline(InlineAction::JoinMeeting);
         }
@@ -2707,13 +2707,10 @@ impl App {
         self.prayer_tick();
         self.calendar_tick();
         self.script_tick();
-        // Calendar switched off: its tab is gone, and nothing it read is kept.
+        // Calendar switched off: nothing it read is kept.
         if !self.st.calendar_on() && self.st.calendar.fetched_at.is_some() {
             let linked = self.st.calendar.linked;
             self.st.calendar = crate::state::CalendarState { linked, ..Default::default() };
-        }
-        if self.st.page == PageKind::Calendar && !self.st.calendar_on() {
-            self.st.page = PageKind::Addons;
         }
         // Prayer times switched off: its tab is gone.
         if self.st.page == PageKind::Prayer && !self.st.prayer_on() {
@@ -2805,7 +2802,8 @@ impl App {
             dt = dt.min(period);
         }
         let dt = dt.clamp(0.0, 0.05) as f32;
-        self.set_stats(self.mode == Mode::Expanded(PageKind::Today));
+        // The Calendar add-on's meetings take the tiles' place: nothing to sample.
+        self.set_stats(self.mode == Mode::Expanded(PageKind::Today) && !self.st.calendar_on());
         self.set_sysmon(self.mode == Mode::Expanded(PageKind::System));
         self.set_oyenza_watch(self.mode == Mode::Expanded(PageKind::Oyenza));
         // The Pill theme floats the island below the top edge.
@@ -3433,7 +3431,7 @@ impl App {
             } else {
                 crate::autostart::report(self.sink.clone(), None);
             }
-            self.set_stats(p == PageKind::Today && self.expanded);
+            self.set_stats(p == PageKind::Today && self.expanded && !self.st.calendar_on());
             self.set_sysmon(p == PageKind::System && self.expanded);
             if self.text_focus {
                 self.blur_text();
