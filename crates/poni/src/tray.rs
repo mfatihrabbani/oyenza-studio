@@ -56,6 +56,10 @@ pub enum MenuCmd {
     SetTheme(Theme),
     ToggleClipboard,
     ToggleQuickAdd,
+    /// Put the island's hooks in Claude Code's settings, or take them out.
+    ToggleClaudeHooks,
+    /// The same with Codex's `notify`.
+    ToggleCodexNotify,
     CopyClaudeHooks,
     CopyCodexNotify,
     ToggleSystemHistory,
@@ -132,9 +136,12 @@ pub fn menu_items(s: &Settings, pinned: bool, oyenza: &OyenzaLink, recorder: boo
         MenuItem::Sub {
             label: "AI sessions (Claude Code, Codex)".into(),
             items: vec![
-                MenuItem::Info { label: "Copy, then paste into the tool's settings".into() },
-                item("Copy Claude Code hooks (~/.claude/settings.json)", MenuCmd::CopyClaudeHooks, false),
-                item("Copy Codex notify line (~/.codex/config.toml)", MenuCmd::CopyCodexNotify, false),
+                MenuItem::Info { label: "Checked: its sessions tell the island".into() },
+                item("Claude Code", MenuCmd::ToggleClaudeHooks, agent_connected(true)),
+                item("Codex", MenuCmd::ToggleCodexNotify, agent_connected(false)),
+                MenuItem::Separator,
+                item("Copy Claude Code hooks (to paste by hand)", MenuCmd::CopyClaudeHooks, false),
+                item("Copy Codex notify line (to paste by hand)", MenuCmd::CopyCodexNotify, false),
             ],
         },
         item("Keep System page history", MenuCmd::ToggleSystemHistory, s.system_history),
@@ -164,6 +171,15 @@ pub fn menu_items(s: &Settings, pinned: bool, oyenza: &OyenzaLink, recorder: boo
         items.splice(0..0, [item("Record this screen", MenuCmd::RecordScreen, false), MenuItem::Separator]);
     }
     items
+}
+
+/// Whether Claude Code's settings (`claude`) or Codex's config run the island.
+fn agent_connected(claude: bool) -> bool {
+    if claude {
+        std::fs::read_to_string(crate::paths::claude_settings_path()).is_ok_and(|t| poni_core::agents::claude_connected(&t))
+    } else {
+        std::fs::read_to_string(crate::paths::codex_config_path()).is_ok_and(|t| poni_core::agents::codex_connected(&t))
+    }
 }
 
 /// Opt-in lyrics from Apple Music with the user's own token.

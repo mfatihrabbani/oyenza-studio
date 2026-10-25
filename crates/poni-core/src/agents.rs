@@ -246,6 +246,147 @@ pub fn codex_notify_line(exe: &str) -> String {
     format!("notify = [\"{}\", \"--agent\", \"codex\"]", exe.replace('\\', "/"))
 }
 
+/// The hook events Oyenza Studio listens to in Claude Code.
+const CLAUDE_EVENTS: [&str; 4] = ["UserPromptSubmit", "Notification", "Stop", "SessionEnd"];
+/// What marks a hook or a notify line as Oyenza Studio's.
+const OURS: &str = "--agent";
+
+fn claude_command(exe: &str) -> String {
+    format!("\"{}\" --agent claude", exe.replace('\\', "/"))
+}
+
+fn is_ours(hook: &serde_json::Value) -> bool {
+    hook.get("command").and_then(|c| c.as_str()).is_some_and(|c| c.contains(OURS) && c.contains("claude"))
+}
+
+/// Whether Claude Code's settings (`~/.claude/settings.json`) carry the hooks.
+pub fn claude_connected(settings: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(settings) else { return false };
+    CLAUDE_EVENTS.iter().all(|e| {
+        v["hooks"][e].as_array().is_some_and(|groups| groups.iter().any(|g| g["hooks"].as_array().is_some_and(|hs| hs.iter().any(is_ours))))
+    })
+}
+
+/// Claude Code's settings with the island's hooks in, for this poni.exe:
+/// every other setting and hook stays; one of ours already there gets this
+/// exe's path. `settings` may be empty (no file yet). Refuses a file that
+/// isn't a JSON object, rather than lose what's in it.
+pub fn claude_settings_with_hooks(settings: &str, exe: &str) -> Result<String, String> {
+    let mut v = parse_settings(settings)?;
+    let command = claude_command(exe);
+    let root = v.as_object_mut().ok_or("not a JSON object")?;
+    let hooks = root.entry("hooks").or_insert_with(|| serde_json::json!({}));
+    let hooks = hooks.as_object_mut().ok_or("\"hooks\" is not an object")?;
+    for event in CLAUDE_EVENTS {
+        let groups = hooks.entry(event).or_insert_with(|| serde_json::json!([]));
+        let groups = groups.as_array_mut().ok_or_else(|| format!("\"{event}\" is not a list"))?;
+        let mut found = false;
+        for g in groups.iter_mut() {
+            if let Some(hs) = g.get_mut("hooks").and_then(|h| h.as_array_mut()) {
+                for h in hs.iter_mut().filter(|h| is_ours(h)) {
+                    h["command"] = serde_json::Value::String(command.clone());
+                    found = true;
+                }
+            }
+        }
+        if !found {
+            groups.push(serde_json::json!({ "hooks": [{ "type": "command", "command": command }] }));
+        }
+    }
+    serde_json::to_string_pretty(&v).map_err(|e| e.to_string())
+}
+
+/// Claude Code's settings without the island's hooks (groups and lists
+/// left empty by that go too).
+pub fn claude_settings_without_hooks(settings: &str) -> Result<String, String> {
+    let mut v = parse_settings(settings)?;
+    if let Some(hooks) = v.get_mut("hooks").and_then(|h| h.as_object_mut()) {
+        for event in CLAUDE_EVENTS {
+            let Some(groups) = hooks.get_mut(event).and_then(|g| g.as_array_mut()) else { continue };
+            for g in groups.iter_mut() {
+                if let Some(hs) = g.get_mut("hooks").and_then(|h| h.as_array_mut()) {
+                    hs.retain(|h| !is_ours(h));
+                }
+            }
+            groups.retain(|g| g.get("hooks").and_then(|h| h.as_array()).is_none_or(|hs| !hs.is_empty()));
+            if groups.is_empty() {
+                hooks.remove(event);
+            }
+        }
+        if hooks.is_empty() {
+            if let Some(root) = v.as_object_mut() {
+                root.remove("hooks");
+            }
+        }
+    }
+    serde_json::to_string_pretty(&v).map_err(|e| e.to_string())
+}
+
+fn parse_settings(settings: &str) -> Result<serde_json::Value, String> {
+    if settings.trim().is_empty() {
+        return Ok(serde_json::json!({}));
+    }
+    let v: serde_json::Value = serde_json::from_str(settings).map_err(|e| format!("settings.json has an error ({e})"))?;
+    if v.is_object() {
+        Ok(v)
+    } else {
+        Err("settings.json is not a JSON object".into())
+    }
+}
+
+/// The top-level `notify` line of a Codex config, if there is one: its
+/// index and text. Tables start at the first `[...]` header.
+fn codex_notify_at(config: &str) -> Option<(usize, &str)> {
+    for (i, line) in config.lines().enumerate() {
+        let t = line.trim_start();
+        if t.starts_with('[') {
+            return None;
+        }
+        if let Some(rest) = t.strip_prefix("notify") {
+            if rest.trim_start().starts_with('=') {
+                return Some((i, line));
+            }
+        }
+    }
+    None
+}
+
+/// Whether Codex's config (`~/.codex/config.toml`) runs the island on `notify`.
+pub fn codex_connected(config: &str) -> bool {
+    codex_notify_at(config).is_some_and(|(_, l)| l.contains(OURS))
+}
+
+/// Codex's config with the island's `notify` line, for this poni.exe. Its
+/// own line is replaced; another program's `notify` is left alone (Codex
+/// runs only one), and that's an error to show.
+pub fn codex_config_with_notify(config: &str, exe: &str) -> Result<String, String> {
+    let line = codex_notify_line(exe);
+    let mut lines: Vec<&str> = config.lines().collect();
+    match codex_notify_at(config) {
+        Some((i, l)) if l.contains(OURS) => lines[i] = line.as_str(),
+        Some(_) => return Err("Codex already runs another notify program".into()),
+        // Top-level keys go before the first table.
+        None => lines.insert(0, line.as_str()),
+    }
+    Ok(lines.join("\n") + "\n")
+}
+
+/// Codex's config without the island's `notify` line.
+pub fn codex_config_without_notify(config: &str) -> String {
+    match codex_notify_at(config) {
+        Some((i, l)) if l.contains(OURS) => {
+            let mut lines: Vec<&str> = config.lines().collect();
+            lines.remove(i);
+            if lines.is_empty() {
+                String::new()
+            } else {
+                lines.join("\n") + "\n"
+            }
+        }
+        _ => config.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,6 +450,61 @@ mod tests {
         assert!(s.get("Claude:b").is_none());
         s.remove("Claude:c");
         assert!(s.list.is_empty());
+    }
+
+    #[test]
+    fn claude_settings_get_the_hooks_and_keep_everything_else() {
+        let exe = r"C:\P\poni.exe";
+        let before = r#"{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"say done"}]}],"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"lint"}]}]}}"#;
+        assert!(!claude_connected(before));
+        let after = claude_settings_with_hooks(before, exe).unwrap();
+        assert!(claude_connected(&after));
+        let v: serde_json::Value = serde_json::from_str(&after).unwrap();
+        assert_eq!(v["model"], "opus");
+        assert_eq!(v["hooks"]["PreToolUse"][0]["hooks"][0]["command"], "lint");
+        // Their own Stop hook stays, ours joins it.
+        let stop = v["hooks"]["Stop"].as_array().unwrap();
+        assert_eq!(stop.len(), 2);
+        assert_eq!(stop[0]["hooks"][0]["command"], "say done");
+        assert_eq!(stop[1]["hooks"][0]["command"], "\"C:/P/poni.exe\" --agent claude");
+        // Connecting again (a moved exe) updates ours instead of adding.
+        let again = claude_settings_with_hooks(&after, r"D:\New\poni.exe").unwrap();
+        let v2: serde_json::Value = serde_json::from_str(&again).unwrap();
+        assert_eq!(v2["hooks"]["Stop"].as_array().unwrap().len(), 2);
+        assert_eq!(v2["hooks"]["Stop"][1]["hooks"][0]["command"], "\"D:/New/poni.exe\" --agent claude");
+        // Removing leaves theirs and drops what's left empty.
+        let off = claude_settings_without_hooks(&again).unwrap();
+        assert!(!claude_connected(&off));
+        let v3: serde_json::Value = serde_json::from_str(&off).unwrap();
+        assert_eq!(v3["hooks"]["Stop"].as_array().unwrap().len(), 1);
+        assert!(v3["hooks"].get("UserPromptSubmit").is_none());
+        assert_eq!(v3["hooks"]["PreToolUse"][0]["matcher"], "Bash");
+        // No file yet, and a broken one.
+        assert!(claude_connected(&claude_settings_with_hooks("", exe).unwrap()));
+        assert_eq!(claude_settings_without_hooks(&claude_settings_with_hooks("", exe).unwrap()).unwrap(), "{}");
+        assert!(claude_settings_with_hooks("{ oops", exe).is_err());
+        assert!(claude_settings_with_hooks("[1]", exe).is_err());
+    }
+
+    #[test]
+    fn codex_config_gets_one_notify_line_at_the_top_level() {
+        let exe = r"C:\P\poni.exe";
+        let before = "model = \"o4\"\n\n[mcp_servers.x]\ncommand = \"y\"\nnotify = \"inside a table\"\n";
+        assert!(!codex_connected(before));
+        let after = codex_config_with_notify(before, exe).unwrap();
+        assert!(codex_connected(&after));
+        assert!(after.starts_with("notify = [\"C:/P/poni.exe\", \"--agent\", \"codex\"]\nmodel"));
+        assert!(after.contains("[mcp_servers.x]\ncommand = \"y\"\nnotify = \"inside a table\""));
+        // Again: replaced, not doubled.
+        let again = codex_config_with_notify(&after, r"D:\poni.exe").unwrap();
+        assert_eq!(again.matches("--agent").count(), 1);
+        assert!(again.contains("D:/poni.exe"));
+        // Someone else's notify stays theirs.
+        assert!(codex_config_with_notify("notify = [\"other\"]\n", exe).is_err());
+        // Off: our line goes, the rest stays.
+        assert_eq!(codex_config_without_notify(&again), before);
+        assert_eq!(codex_config_without_notify(&codex_config_with_notify("", exe).unwrap()), "");
+        assert_eq!(codex_config_without_notify("notify = [\"other\"]\n"), "notify = [\"other\"]\n");
     }
 
     #[test]

@@ -48,6 +48,17 @@ pub fn apple_music_token_path() -> PathBuf {
     cache_dir().join("apple-music-token.bin")
 }
 
+/// Claude Code's user settings, where its hooks live (`CLAUDE_CONFIG_DIR`
+/// moves them).
+pub fn claude_settings_path() -> PathBuf {
+    std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| env_dir("USERPROFILE").join(".claude")).join("settings.json")
+}
+
+/// Codex's config, where its `notify` program is named (`CODEX_HOME` moves it).
+pub fn codex_config_path() -> PathBuf {
+    std::env::var_os("CODEX_HOME").map(PathBuf::from).unwrap_or_else(|| env_dir("USERPROFILE").join(".codex")).join("config.toml")
+}
+
 /// The calendar's secret iCal link (`services::calendar`), sealed like the
 /// Apple Music token: anyone with it can read the calendar.
 pub fn calendar_link_path() -> PathBuf {

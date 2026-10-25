@@ -312,12 +312,9 @@ Anything else is a task. **Quick add from any app** in the tray menu turns the s
 
 Working with Claude Code or Codex? The island tells you when a session **needs you** (a permission, a question) and when it's **done**, with **Open**, which brings its terminal or editor window to the front. While any session is known, an **AI** tab lists them all: the ones that need you first, then working, then done, each with Open. Finished ones leave after half an hour. On Windows.
 
-The tools tell the island themselves, through their own hooks; nothing polls or listens in between. Right-click the island (or the tray icon) → **AI sessions (Claude Code, Codex)**:
+The tools tell the island themselves, through their own hooks; nothing polls or listens in between. To connect one, right-click the island (or the tray icon) → **AI sessions (Claude Code, Codex)** and click **Claude Code** or **Codex**: Oyenza Studio adds its hook to `~/.claude/settings.json` or its `notify` line to `~/.codex/config.toml`, keeps everything else in the file, and leaves a copy of the file as it was next to it (`settings.json.oyenza-backup`, `config.toml.oyenza-backup`). Click again to take it out. Sessions started after that report to the island. If Codex already runs another `notify` program, it's left alone and the island says so. The same menu can also copy the setup to paste by hand.
 
-- **Copy Claude Code hooks**, then paste them into `~/.claude/settings.json` (merge with a `hooks` block you already have).
-- **Copy Codex notify line**, then paste it into `~/.codex/config.toml`.
-
-Both name the `poni.exe` that's installed, which, run by a hook, passes what the tool said to the running island and exits at once. Open uses the window that was in front when you sent the prompt, else the first window whose title names the session's folder. Codex says only when a turn is done, so its sessions show as done, not working.
+The hook runs the installed `poni.exe`, which passes what the tool said to the running island and exits at once. Open uses the window that was in front when you sent the prompt, else the first window whose title names the session's folder. Codex says only when a turn is done, so its sessions show as done, not working.
 
 ### Phone drop
 

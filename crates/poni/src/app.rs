@@ -1315,6 +1315,58 @@ impl App {
         self.st.chime();
     }
 
+    /// The tray's Claude Code (`claude`) or Codex switch: put the island in
+    /// the tool's own settings, or take it out, keeping everything else
+    /// there and a copy of the file as it was (`*.oyenza-backup`).
+    fn toggle_agent_setup(&mut self, claude: bool) {
+        use poni_core::agents;
+        let (path, name) = if claude { (paths::claude_settings_path(), "Claude Code") } else { (paths::codex_config_path(), "Codex") };
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(e) => {
+                pwarn!("agents: cannot read {} ({e})", path.display());
+                self.st.notify(Icon::Agent, palette::ORANGE, format!("Couldn't read {name}'s settings"), "Details in poni.log", 5.0, None);
+                return;
+            }
+        };
+        let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+        let on = if claude { agents::claude_connected(&text) } else { agents::codex_connected(&text) };
+        let changed = match (claude, on) {
+            (true, false) => agents::claude_settings_with_hooks(&text, &exe),
+            (true, true) => agents::claude_settings_without_hooks(&text),
+            (false, false) => agents::codex_config_with_notify(&text, &exe),
+            (false, true) => Ok(agents::codex_config_without_notify(&text)),
+        };
+        let new = match changed {
+            Ok(n) => n,
+            Err(why) => {
+                pwarn!("agents: {name} not changed ({why})");
+                self.st.notify(Icon::Agent, palette::ORANGE, format!("Couldn't change {name}'s settings"), why, 6.0, None);
+                return;
+            }
+        };
+        if !text.is_empty() {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let _ = std::fs::write(path.with_file_name(format!("{name}.oyenza-backup")), &text);
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Err(e) = poni_core::store::write_bytes_atomic(&path, new.as_bytes()) {
+            pwarn!("agents: cannot write {} ({e})", path.display());
+            self.st.notify(Icon::Agent, palette::ORANGE, format!("Couldn't change {name}'s settings"), "Details in poni.log", 5.0, None);
+            return;
+        }
+        pinfo!("agents: {name} {}", if on { "disconnected" } else { "connected" });
+        let (title, subtitle) = if on {
+            (format!("{name} disconnected"), "Its sessions no longer tell the island")
+        } else {
+            (format!("{name} connected"), "New sessions tell the island")
+        };
+        self.st.notify(Icon::Agent, if on { palette::BLUE } else { palette::GREEN }, title, subtitle, 5.0, None);
+    }
+
     /// Open: the session's window to the front (a finished one leaves the list).
     fn open_agent(&mut self, key: &str) {
         let Some(s) = self.st.agents.sessions.get(key).cloned() else { return };
@@ -1809,6 +1861,8 @@ impl App {
             SetTheme(theme) => s.theme = theme,
             ToggleClipboard => s.clipboard_history = !s.clipboard_history,
             ToggleQuickAdd => s.quick_add = !s.quick_add,
+            ToggleClaudeHooks => self.toggle_agent_setup(true),
+            ToggleCodexNotify => self.toggle_agent_setup(false),
             CopyClaudeHooks | CopyCodexNotify => {
                 let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
                 let (text, whereto) = if cmd == CopyClaudeHooks {
