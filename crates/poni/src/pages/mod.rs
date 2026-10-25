@@ -10,6 +10,7 @@
 //! files, saving, …).
 
 pub mod addons;
+pub mod calendar;
 pub mod clipboard;
 pub mod focus;
 pub mod health;
@@ -60,6 +61,8 @@ pub enum PageKind {
     Script,
     /// Only while signing in to Oyenza or signed in ([`tabs`]).
     Oyenza,
+    /// Today's meetings, while the Calendar add-on is on ([`tabs`]).
+    Calendar,
     /// Prayer times, while that add-on is on ([`tabs`]).
     Prayer,
     /// The "+" at the end of the tab row: features to switch on, each of
@@ -70,7 +73,7 @@ pub enum PageKind {
 }
 
 impl PageKind {
-    pub const ALL: [PageKind; 13] = [
+    pub const ALL: [PageKind; 14] = [
         PageKind::Media,
         PageKind::Focus,
         PageKind::Health,
@@ -81,6 +84,7 @@ impl PageKind {
         PageKind::System,
         PageKind::Script,
         PageKind::Oyenza,
+        PageKind::Calendar,
         PageKind::Prayer,
         PageKind::Addons,
         PageKind::Settings,
@@ -98,6 +102,7 @@ impl PageKind {
             PageKind::System => "system",
             PageKind::Script => "script",
             PageKind::Oyenza => "oyenza",
+            PageKind::Calendar => "calendar",
             PageKind::Prayer => "prayer",
             PageKind::Addons => "addons",
             PageKind::Settings => "settings",
@@ -122,6 +127,7 @@ impl PageKind {
             PageKind::System => "System",
             PageKind::Script => "Script",
             PageKind::Oyenza => "Oyenza",
+            PageKind::Calendar => "Calendar",
             PageKind::Prayer => "Prayer",
             PageKind::Addons => "Add-ons",
             PageKind::Settings => "Settings",
@@ -140,6 +146,7 @@ impl PageKind {
             PageKind::System => Icon::Gauge,
             PageKind::Script => Icon::Script,
             PageKind::Oyenza => Icon::Wallet,
+            PageKind::Calendar => Icon::Video,
             PageKind::Prayer => Icon::Moon,
             PageKind::Addons => Icon::Addons,
             PageKind::Settings => Icon::Gear,
@@ -171,6 +178,7 @@ pub fn tabs(st: &AppState) -> Vec<PageKind> {
         .into_iter()
         .filter(|p| match p {
             PageKind::Oyenza => st.oyenza.tab_visible(),
+            PageKind::Calendar => st.calendar_on(),
             PageKind::Prayer => st.prayer_on(),
             PageKind::Script => st.script_on(),
             p => p.tabbed(),
@@ -198,6 +206,7 @@ pub fn content_height(p: PageKind, st: &AppState) -> f32 {
         PageKind::System => system::height(st),
         PageKind::Script => script::height(st),
         PageKind::Oyenza => oyenza::height(st),
+        PageKind::Calendar => calendar::height(st),
         PageKind::Prayer => prayer::height(st),
         PageKind::Addons => addons::height(st),
         PageKind::Settings => settings::height(st),
@@ -328,6 +337,7 @@ pub(crate) fn draw_page(ui: &mut Ui, st: &mut AppState, area: Rect, page: PageKi
         PageKind::System => system::draw(ui, st, area),
         PageKind::Script => script::draw(ui, st, area),
         PageKind::Oyenza => oyenza::draw(ui, st, area),
+        PageKind::Calendar => calendar::draw(ui, st, area),
         PageKind::Prayer => prayer::draw(ui, st, area),
         PageKind::Addons => addons::draw(ui, st, area),
         PageKind::Settings => settings::draw(ui, st, area),
@@ -651,6 +661,16 @@ mod tests {
         assert!(content_height(PageKind::Prayer, &st) <= content_height(PageKind::Tasks, &st));
         st.addons.insert("sholat", poni_core::addons::Status::Downloading { done: 1, total: 2 });
         assert!(!tabs(&st).contains(&PageKind::Prayer));
+    }
+
+    #[test]
+    fn calendar_has_a_tab_only_while_its_add_on_is_on() {
+        let mut st = state();
+        assert!(!tabs(&st).contains(&PageKind::Calendar));
+        st.addons.insert("calendar", poni_core::addons::Status::Ready);
+        assert!(tabs(&st).contains(&PageKind::Calendar));
+        assert_eq!(tabs(&st).last(), Some(&PageKind::Addons));
+        assert!(content_height(PageKind::Calendar, &st) <= content_height(PageKind::Tasks, &st));
     }
 
     #[test]

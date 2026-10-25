@@ -11,8 +11,11 @@
 //! (BYSETPOS, hourly) keeps only its first time rather than guessing. All-day
 //! events and meetings the calendar's owner declined are left out.
 
-use crate::datetime::{civil_from_days, days_from_civil, days_in_month, fmt_clock, weekday_from_days, LocalDateTime};
+use crate::datetime::{civil_from_days, days_from_civil, days_in_month, fmt_clock, fmt_date_short, weekday_from_days, LocalDateTime};
 use std::collections::HashMap;
+
+/// Where Google Calendar's "Secret address in iCal format" is (Google's help).
+pub const HELP_URL: &str = "https://support.google.com/calendar/answer/37648";
 
 /// How often the file is fetched while a link is saved and someone is at
 /// the PC: a meeting added or moved shows up within this long.
@@ -127,15 +130,56 @@ pub fn minutes_left(m: &Meeting, now: i64) -> i64 {
 
 /// The notice's second line: "In 5 min · 10:00", then "Now · 10:00".
 pub fn notice_subtitle(m: &Meeting, now: i64, local_offset_min: i32, use_24h: bool) -> String {
-    let local = m.start + local_offset_min as i64 * 60;
-    let (y, mo, d) = civil_from_days(local.div_euclid(86400));
-    let sod = local.rem_euclid(86400);
-    let at = LocalDateTime { year: y, month: mo, day: d, hour: (sod / 3600) as u8, minute: (sod / 60 % 60) as u8, second: 0 };
-    let clock = fmt_clock(&at, use_24h);
+    let clock = local_clock(m.start, local_offset_min, use_24h);
     match minutes_left(m, now) {
         0 => format!("Now \u{b7} {clock}"),
         n => format!("In {n} min \u{b7} {clock}"),
     }
+}
+
+/// A UTC time on the PC's wall clock.
+fn local_time(t: i64, local_offset_min: i32) -> LocalDateTime {
+    let local = t + local_offset_min as i64 * 60;
+    let (y, mo, d) = civil_from_days(local.div_euclid(86400));
+    let sod = local.rem_euclid(86400);
+    LocalDateTime { year: y, month: mo, day: d, hour: (sod / 3600) as u8, minute: (sod / 60 % 60) as u8, second: (sod % 60) as u8 }
+}
+
+/// "10:00" (or "10:00 AM") for a UTC time on the PC's clock.
+pub fn local_clock(t: i64, local_offset_min: i32, use_24h: bool) -> String {
+    fmt_clock(&local_time(t, local_offset_min), use_24h)
+}
+
+/// "10:00 – 10:30", the Calendar page's time for a meeting.
+pub fn span(m: &Meeting, local_offset_min: i32, use_24h: bool) -> String {
+    format!("{} \u{2013} {}", local_clock(m.start, local_offset_min, use_24h), local_clock(m.end, local_offset_min, use_24h))
+}
+
+/// The day of a later meeting and its time: "Tomorrow 09:00", "Tue 27 Oct 09:00".
+pub fn later_label(m: &Meeting, now: i64, local_offset_min: i32, use_24h: bool) -> String {
+    let off = local_offset_min as i64 * 60;
+    let day = (m.start + off).div_euclid(86400) - (now + off).div_euclid(86400);
+    let clock = local_clock(m.start, local_offset_min, use_24h);
+    match day {
+        0 => clock,
+        1 => format!("Tomorrow {clock}"),
+        _ => format!("{} {clock}", fmt_date_short(&local_time(m.start, local_offset_min))),
+    }
+}
+
+/// What the Calendar page lists: today's meetings that aren't over yet
+/// (soonest first, one under way included), and the first one after today.
+pub fn today(meetings: &[Meeting], now: i64, local_offset_min: i32) -> (Vec<&Meeting>, Option<&Meeting>) {
+    let off = local_offset_min as i64 * 60;
+    let day = (now + off).div_euclid(86400);
+    let rest = meetings.iter().filter(|m| m.end > now && (m.start + off).div_euclid(86400) <= day).collect();
+    let next = meetings.iter().find(|m| (m.start + off).div_euclid(86400) > day);
+    (rest, next)
+}
+
+/// Under way at `now`.
+pub fn live(m: &Meeting, now: i64) -> bool {
+    m.start <= now && now < m.end
 }
 
 // ------------------------------------------------------------ the file
@@ -863,6 +907,30 @@ mod tests {
         assert_eq!(minutes_left(&list[0], 1000 - 241), 5);
         assert_eq!(minutes_left(&list[0], 1000 - 240), 4);
         assert_eq!(minutes_left(&list[0], 1000), 0);
+    }
+
+    #[test]
+    fn the_page_lists_what_is_left_of_today_and_the_next_one_after() {
+        let m = |key: &str, start: i64, mins: i64| Meeting { key: key.into(), title: key.into(), start, end: start + mins * 60, link: None };
+        // Sun 25 Oct 2026, 14:00 in Jakarta.
+        let now = at(2026, 10, 25, 14, 0, 7);
+        let list = [
+            m("done", at(2026, 10, 25, 9, 0, 7), 30),
+            m("live", at(2026, 10, 25, 13, 30, 7), 60),
+            m("later", at(2026, 10, 25, 16, 0, 7), 30),
+            m("tomorrow", at(2026, 10, 26, 9, 0, 7), 30),
+            m("tuesday", at(2026, 10, 27, 9, 0, 7), 30),
+        ];
+        let (rest, next) = today(&list, now, 420);
+        assert_eq!(rest.iter().map(|m| m.key.as_str()).collect::<Vec<_>>(), ["live", "later"]);
+        assert!(live(rest[0], now) && !live(rest[1], now));
+        assert_eq!(next.map(|m| m.key.as_str()), Some("tomorrow"));
+        assert_eq!(span(rest[0], 420, true), "13:30 \u{2013} 14:30");
+        assert_eq!(later_label(&list[3], now, 420, true), "Tomorrow 09:00");
+        assert_eq!(later_label(&list[4], now, 420, false), "Tue 27 Oct 9:00 AM");
+        // Just before midnight, tomorrow's first meeting isn't today's.
+        let late = at(2026, 10, 25, 23, 50, 7);
+        assert_eq!(today(&list, late, 420).0.len(), 0);
     }
 
     #[test]

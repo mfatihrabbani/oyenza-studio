@@ -281,19 +281,19 @@ Oyenza Studio checks the token with Apple and says whether it worked. It stores 
 
 With a token saved, Oyenza Studio sends each song's title and artist to Apple to find its lyrics. It uses the Apple Music web player's own API, which Apple doesn't publish for other apps, so it can stop working when Apple changes its site. LRCLIB keeps working either way.
 
-### Meeting reminders
+### Calendar
 
-A few minutes before each meeting on your Google Calendar, the island shows it, counting down ("In 5 min · 10:00"), with **Join** for its Google Meet, Zoom, Teams or Webex call. Join opens the call in your browser, where Meet's own transcripts and notes work as usual. On Windows.
+The Calendar add-on gives the island a tab with the rest of today's meetings from your Google Calendar, each with **Join** for its Google Meet, Zoom, Teams or Webex call. A few minutes before each meeting, the closed island shows it too, counting down ("In 5 min · 10:00"), with Join. Join opens the call in your browser, where Meet's own transcripts and notes work as usual. On Windows.
 
 It reads your calendar through its secret iCal address, so there's nothing to sign in to:
 
-1. Open [Google Calendar](https://calendar.google.com) on the web, then **Settings** → your calendar under **Settings for my calendars** → **Integrate calendar**.
-2. Copy **Secret address in iCal format**.
-3. Right-click the island (or the tray icon) → **Meeting reminders** → **Use calendar link from clipboard**.
+1. Open the island's **+** tab and switch on **Calendar**.
+2. Open [Google Calendar](https://calendar.google.com) on the web, then **Settings** → your calendar under **Settings for my calendars** → **Integrate calendar**, and copy **Secret address in iCal format** (not the public one).
+3. On the island's Calendar tab, click **Connect**.
 
-The island says whether the link worked and names your next meeting. **Remind me** in the same menu picks 1, 5 or 10 minutes before; the reminder chimes when Sounds is on. All-day events, cancelled meetings and ones you declined are left out. Any other calendar that gives an `.ics` link (Outlook, iCloud) works the same way.
+**Remind me** under the list picks 1, 5 or 10 minutes before; the reminder chimes when Sounds is on. All-day events, cancelled meetings and ones you declined are left out. Any other calendar that gives an `.ics` link (Outlook, iCloud) works the same way. Work accounts may not offer the secret address if their admin switched it off.
 
-Oyenza Studio fetches the file every 15 minutes while you're at the PC (not while it's locked, the display is off or battery saver is on), and only reads it. The link is stored encrypted for your Windows account (`%LOCALAPPDATA%\Poni\calendar-link.bin`) and cleared from the clipboard. Anyone with the link can read your calendar, so if it ever leaks, reset it in the same Google Calendar settings and copy the new one. **Remove calendar** turns this off.
+Oyenza Studio fetches the file every 15 minutes while the add-on is on and you're at the PC (not while it's locked, the display is off or battery saver is on), and only reads it. The link is stored encrypted for your Windows account (`%LOCALAPPDATA%\Poni\calendar-link.bin`) and cleared from the clipboard. Anyone with the link can read your calendar, so if it ever leaks, reset it in the same Google Calendar settings and connect the new one. **Remove** on the tab deletes it.
 
 ### Phone drop
 

@@ -21,7 +21,11 @@ use poni_core::phonedrop::fmt_bytes;
 
 const INTRO_H: f32 = 18.0;
 const ROWS_Y: f32 = 28.0;
-const ROW_H: f32 = 52.0;
+/// Rows are a little shorter once there are four, so the page stays within
+/// the window (the Tasks page's height).
+const ROW_H: f32 = if OFFERED.len() > 3 { 43.0 } else { 52.0 };
+/// A row's name, its line and the download bar, from this far down the row.
+const TEXT_TOP: f32 = (ROW_H - 41.0) / 2.0;
 const BADGE: f32 = 36.0;
 const TEXT_X: f32 = 48.0;
 /// A row's hover wash reaches this far past its contents (as in Settings).
@@ -32,7 +36,7 @@ const BAR_H: f32 = 3.0;
 
 /// The add-ons this app has, in the page's order: all of them on Windows;
 /// Japanese readings and Script reader on the Mac (Prayer times needs
-/// Windows' location and sound services).
+/// Windows' location and sound services; Calendar's fetching is Windows' only so far).
 pub const OFFERED: &[&Addon] = if cfg!(windows) { &addons::ALL } else { &[&addons::JAPANESE_READINGS, &addons::SCRIPT_READER] };
 /// The lines name the Mac ("on this Mac") and leave out Windows' reasons.
 const MAC: bool = cfg!(target_os = "macos");
@@ -47,6 +51,7 @@ fn icon(a: &Addon) -> Icon {
         "sholat" => Icon::Moon,
         "ja" => Icon::Lyrics,
         "script" => Icon::Script,
+        "calendar" => Icon::Video,
         _ => Icon::Addons,
     }
 }
@@ -93,11 +98,11 @@ fn addon_row(ui: &mut Ui, st: &AppState, r: Rect, i: usize, a: &Addon, card: Opt
 
     let x = r.x + TEXT_X;
     let w = (text_right - x).max(0.0);
-    ui.c.text(a.title, Rect::new(x, r.y + 6.0, w, 20.0), &TextStyle::headline());
+    ui.c.text(a.title, Rect::new(x, r.y + TEXT_TOP, w, 20.0), &TextStyle::headline());
     let line_color = if status == Status::Failed { palette::ORANGE } else { palette::TEXT_DIM };
-    ui.c.text(&status.line(a, MAC), Rect::new(x, r.y + 27.0, w, 17.0), &TextStyle::footnote().color(line_color));
+    ui.c.text(&status.line(a, MAC), Rect::new(x, r.y + TEXT_TOP + 21.0, w, 17.0), &TextStyle::footnote().color(line_color));
     if let Some(p) = status.progress() {
-        let bar = Rect::new(x, r.y + 46.0, w, BAR_H);
+        let bar = Rect::new(x, r.y + TEXT_TOP + 40.0, w, BAR_H);
         ui.c.fill_rrect(bar, BAR_H / 2.0, palette::TRACK);
         if p > 0.0 {
             ui.c.fill_rrect(Rect::new(bar.x, bar.y, (bar.w * p).max(BAR_H), BAR_H), BAR_H / 2.0, accent);

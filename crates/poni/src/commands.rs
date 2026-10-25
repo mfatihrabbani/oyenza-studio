@@ -63,6 +63,17 @@ pub enum OyenzaCmd {
     Refresh,
 }
 
+/// The Calendar page (`services::calendar`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CalendarCmd {
+    /// Save the secret iCal link on the clipboard and read the calendar.
+    UseLink,
+    /// Read the calendar again now.
+    Refresh,
+    /// Remove the link from this PC.
+    Forget,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     Media(MediaCmd),
@@ -113,4 +124,5 @@ pub enum Command {
     Phone(PhoneCmd),
     Pair(PairCmd),
     Oyenza(OyenzaCmd),
+    Calendar(CalendarCmd),
 }

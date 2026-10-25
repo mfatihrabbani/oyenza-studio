@@ -74,12 +74,6 @@ pub enum MenuCmd {
     AppleMusicToken,
     AppleMusicHelp,
     AppleMusicForget,
-    CalendarLink,
-    CalendarHelp,
-    CalendarRefresh,
-    CalendarForget,
-    /// Minutes before a meeting its notice shows.
-    MeetingRemind(u32),
     OyenzaSignIn,
     OyenzaCancel,
     OyenzaDisconnect,
@@ -129,7 +123,6 @@ pub fn menu_items(s: &Settings, pinned: bool, oyenza: &OyenzaLink, recorder: boo
         item("Synced lyrics", MenuCmd::ToggleLyrics, s.lyrics),
         item("Lyrics pronunciation (romaji, pinyin, Korean)", MenuCmd::TogglePronunciation, s.lyrics_pronunciation),
         apple_music_menu(),
-        calendar_menu(s),
         oyenza_menu(s, oyenza),
         item("Clipboard history", MenuCmd::ToggleClipboard, s.clipboard_history),
         item("Keep System page history", MenuCmd::ToggleSystemHistory, s.system_history),
@@ -173,26 +166,6 @@ fn apple_music_menu() -> MenuItem {
         items.push(item("Remove token", MenuCmd::AppleMusicForget, false));
     }
     MenuItem::Sub { label: if on { "Apple Music lyrics: on".into() } else { "Apple Music lyrics".into() }, items }
-}
-
-/// Meeting reminders from the calendar's secret iCal link: a notice with
-/// Join a few minutes before each meeting.
-fn calendar_menu(s: &Settings) -> MenuItem {
-    let on = crate::paths::calendar_link_path().exists();
-    let mut items = vec![
-        item("Use calendar link from clipboard", MenuCmd::CalendarLink, false),
-        item("How to get the link", MenuCmd::CalendarHelp, false),
-    ];
-    if on {
-        let remind = |label: &str, min: u32| item(label, MenuCmd::MeetingRemind(min), s.meeting_remind_min == min);
-        items.extend([
-            MenuItem::Sub { label: "Remind me".into(), items: vec![remind("1 minute before", 1), remind("5 minutes before", 5), remind("10 minutes before", 10)] },
-            item("Check for new meetings now", MenuCmd::CalendarRefresh, false),
-            MenuItem::Separator,
-            item("Remove calendar", MenuCmd::CalendarForget, false),
-        ]);
-    }
-    MenuItem::Sub { label: if on { "Meeting reminders: on".into() } else { "Meeting reminders".into() }, items }
 }
 
 /// Oyenza, optional: sign in with a code from oyenza.app, then what the
@@ -257,7 +230,7 @@ pub fn show_menu(owner: HWND, pt: POINT, items: &[MenuItem]) -> Option<MenuCmd> 
         let _ = DestroyMenu(menu);
         let idx = chosen.0 as usize;
         let cmd = if idx == 0 { None } else { cmds.get(idx - 1).copied() };
-        let launches = matches!(cmd, Some(MenuCmd::OpenSettings | MenuCmd::OpenDataFolder | MenuCmd::About | MenuCmd::AppleMusicHelp | MenuCmd::CalendarHelp | MenuCmd::OyenzaOpen));
+        let launches = matches!(cmd, Some(MenuCmd::OpenSettings | MenuCmd::OpenDataFolder | MenuCmd::About | MenuCmd::AppleMusicHelp | MenuCmd::OyenzaOpen));
         if !launches && !prev.is_invalid() && prev != owner && IsWindow(prev).as_bool() && GetForegroundWindow() == owner {
             let _ = SetForegroundWindow(prev);
         }

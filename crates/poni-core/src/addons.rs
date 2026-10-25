@@ -117,8 +117,20 @@ pub const SCRIPT_READER: Addon = Addon {
     files: &[],
 };
 
+/// Calendar: today's meetings from the calendar's secret iCal link, and a
+/// notice with Join a few minutes before each (`calendar`). Its code is in
+/// the app; off, there is no Calendar tab, no fetch and no reminder.
+pub const CALENDAR: Addon = Addon {
+    id: "calendar",
+    title: "Calendar",
+    blurb: "Today's meetings, and a reminder with Join before each one.",
+    mac_blurb: None,
+    tag: "",
+    files: &[],
+};
+
 /// Every add-on, in the order the Add-ons page lists them.
-pub const ALL: [&Addon; 3] = [&PRAYER_TIMES, &JAPANESE_READINGS, &SCRIPT_READER];
+pub const ALL: [&Addon; 4] = [&PRAYER_TIMES, &JAPANESE_READINGS, &SCRIPT_READER, &CALENDAR];
 
 /// Whether Japanese readings switch themselves on for a song whose kanji went
 /// unread for want of them (`wants`): only while the person reads
@@ -219,6 +231,8 @@ mod tests {
         assert_eq!(Status::Ready.line(&SCRIPT_READER, false), "On");
         assert_eq!(Status::Off.line(&SCRIPT_READER, true), "A teleprompter under your webcam.");
         assert_eq!(Addon::find("script"), Some(&SCRIPT_READER));
+        assert!(!CALENDAR.downloads());
+        assert_eq!(Addon::find("calendar"), Some(&CALENDAR));
     }
 
     #[test]

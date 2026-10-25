@@ -423,6 +423,10 @@ pub struct CalendarState {
     pub tried_at: Option<i64>,
     /// The link was just saved: the island says how the first fetch went.
     pub announce: bool,
+    /// Why the last fetch brought no calendar, until one does.
+    pub problem: Option<&'static str>,
+    /// What Connect said (the clipboard held no link), until a time (mono seconds).
+    pub note: Option<(&'static str, f64)>,
     /// Meetings whose notice already showed (`Meeting::key`).
     pub reminded: Vec<String>,
     /// The meeting the notice is about, and its call's link for Join
@@ -570,7 +574,7 @@ impl AppState {
         }
         // Last open on the Script page, since switched off: open where a new
         // island does.
-        if st.page == PageKind::Script && !st.script_on() {
+        if (st.page == PageKind::Script && !st.script_on()) || (st.page == PageKind::Calendar && !st.calendar_on()) {
             st.page = PageKind::ALL[0];
         }
         st
@@ -584,6 +588,12 @@ impl AppState {
     /// The Script reader add-on is on: the Script tab shows.
     pub fn script_on(&self) -> bool {
         self.addon(poni_core::addons::SCRIPT_READER.id) == AddonStatus::Ready
+    }
+
+    /// The Calendar add-on is on: its tab shows, and with a link saved the
+    /// meetings are fetched and reminded.
+    pub fn calendar_on(&self) -> bool {
+        self.addon(poni_core::addons::CALENDAR.id) == AddonStatus::Ready
     }
 
     /// Prayer times is on and its places are read: the tab and reminders run.

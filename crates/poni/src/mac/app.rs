@@ -1774,6 +1774,8 @@ impl App {
                 Command::Collapse => self.collapse(),
                 Command::Play(s) => services::play(s == Sound::Chime),
                 Command::OpenUrl(u) => services::open(&u),
+                // No Calendar add-on on the Mac yet.
+                Command::Calendar(_) => {}
                 Command::WantStats(b) => self.set_stats(b),
                 Command::SetAutostart(on) => {
                     if (services::login::status() == Login::On) != on {

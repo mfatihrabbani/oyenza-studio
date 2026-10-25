@@ -3,7 +3,7 @@
 
 use crate::activities::{self, Mode};
 use crate::clock;
-use crate::commands::{Command, MediaCmd, OyenzaCmd, PairCmd, PhoneCmd};
+use crate::commands::{CalendarCmd, Command, MediaCmd, OyenzaCmd, PairCmd, PhoneCmd};
 use crate::events::{AppEvent, AppleMusicStatus, CalendarEvent, EventSink, OyenzaEvent, SendHwnd, WM_APP_APPBAR, WM_APP_EVENT, WM_APP_FRAME, WM_APP_TRAY};
 use crate::gfx::{px_rect, px_union, scale_about, union_rect, Canvas, Gfx, HitMask};
 use crate::icons::Icon;
@@ -77,8 +77,6 @@ const WTS_SESSION_UNLOCK_: usize = 8;
 
 /// Steps for copying the Apple Music token (README).
 const APPLE_MUSIC_HELP_URL: &str = "https://github.com/lucacadalora/oyenza-studio#apple-music-lyrics";
-/// Where Google Calendar's "Secret address in iCal format" is (Google's help).
-const CALENDAR_HELP_URL: &str = "https://support.google.com/calendar/answer/37648";
 /// Phone drop closes itself after this long without a request from a phone.
 const PHONE_IDLE_S: f64 = 600.0;
 
@@ -1273,7 +1271,7 @@ impl App {
     fn use_calendar_link(&mut self) {
         let text = services::clipboard::read_text(self.hwnd).unwrap_or_default();
         let Some(link) = poni_core::calendar::clean_link(&text) else {
-            self.st.notify(Icon::Calendar, palette::ORANGE, "No calendar link copied", "Copy the secret address in iCal format", 6.0, None);
+            self.st.calendar.note = Some(("No calendar link on the clipboard: copy the secret address in iCal format", self.st.now + 6.0));
             return;
         };
         if let Err(e) = services::secret::save(&paths::calendar_link_path(), &link) {
@@ -1285,7 +1283,6 @@ impl App {
         self.forget_clipboard_text(text.trim());
         self.st.calendar = crate::state::CalendarState { linked: true, announce: true, ..Default::default() };
         self.fetch_calendar();
-        self.st.notify(Icon::Calendar, palette::BLUE, "Checking the calendar", "One moment", 4.0, None);
     }
 
     fn forget_calendar_link(&mut self) {
@@ -1296,7 +1293,6 @@ impl App {
         }
         pinfo!("calendar: link removed");
         self.st.calendar = Default::default();
-        self.st.notify(Icon::Calendar, palette::BLUE, "Meeting reminders off", "The calendar link is gone from this PC", 4.0, None);
     }
 
     fn fetch_calendar(&mut self) {
@@ -1326,6 +1322,7 @@ impl App {
                 c.meetings = meetings;
                 c.fetched_at = Some(unix);
                 c.fails = 0;
+                c.problem = None;
                 pinfo!("calendar: {} meetings ahead", c.meetings.len());
                 if announce {
                     let offset = oyenza::offset_minutes(&self.st.local, unix);
@@ -1344,11 +1341,13 @@ impl App {
             CalendarEvent::Refused(status) => {
                 pwarn!("calendar: the link answered {status}, not with a calendar");
                 c.fails += 1;
+                c.problem = Some("That link doesn't open a calendar");
                 announce.then_some(("Calendar link not accepted", "Copy the secret address again"))
             }
             CalendarEvent::Failed(why) => {
                 pwarn!("calendar: fetch failed ({why})");
                 c.fails += 1;
+                c.problem = Some("Can't reach the calendar");
                 announce.then_some(("Can't reach the calendar", "Link saved; trying again soon"))
             }
         };
@@ -1362,7 +1361,7 @@ impl App {
     /// "In 4 min" current. Fetches rest while nobody is at the PC and on
     /// battery saver; reminders from the meetings already read still come.
     fn calendar_tick(&mut self) {
-        if !self.st.calendar.linked || self.selftest.is_some() {
+        if !self.st.calendar_on() || !self.st.calendar.linked || self.selftest.is_some() {
             return;
         }
         let unix = self.st.unix;
@@ -1414,7 +1413,7 @@ impl App {
         c.notice_for = Some(m.key.clone());
         c.join = m.link.clone();
         let secs = (m.start + poni_core::calendar::START_GRACE_S - unix).max(30) as f64;
-        self.st.notify(Icon::Calendar, self.st.accent, m.title.clone(), subtitle, secs, None);
+        self.st.notify(Icon::Calendar, self.st.accent, m.title.clone(), subtitle, secs, Some(NoticeAction::OpenPage(PageKind::Calendar)));
         if m.link.is_some() {
             self.st.set_notice_inline(InlineAction::JoinMeeting);
         }
@@ -1796,14 +1795,6 @@ impl App {
             AppleMusicToken => self.use_apple_music_token(),
             AppleMusicHelp => shell::open(APPLE_MUSIC_HELP_URL),
             AppleMusicForget => self.forget_apple_music_token(),
-            CalendarLink => self.use_calendar_link(),
-            CalendarHelp => shell::open(CALENDAR_HELP_URL),
-            CalendarRefresh => {
-                self.st.calendar.announce = true;
-                self.fetch_calendar();
-            }
-            CalendarForget => self.forget_calendar_link(),
-            MeetingRemind(min) => s.meeting_remind_min = min,
             OyenzaSignIn => self.oyenza(OyenzaCmd::SignIn),
             OyenzaCancel => self.oyenza(OyenzaCmd::Cancel),
             OyenzaDisconnect => self.oyenza(OyenzaCmd::Disconnect),
@@ -2716,6 +2707,14 @@ impl App {
         self.prayer_tick();
         self.calendar_tick();
         self.script_tick();
+        // Calendar switched off: its tab is gone, and nothing it read is kept.
+        if !self.st.calendar_on() && self.st.calendar.fetched_at.is_some() {
+            let linked = self.st.calendar.linked;
+            self.st.calendar = crate::state::CalendarState { linked, ..Default::default() };
+        }
+        if self.st.page == PageKind::Calendar && !self.st.calendar_on() {
+            self.st.page = PageKind::Addons;
+        }
         // Prayer times switched off: its tab is gone.
         if self.st.page == PageKind::Prayer && !self.st.prayer_on() {
             self.st.page = PageKind::Addons;
@@ -3528,6 +3527,14 @@ impl App {
                 Command::Collapse => self.collapse(),
                 Command::Play(s) => services::sound::play(s),
                 Command::OpenUrl(u) => shell::open(&u),
+                Command::Calendar(c) => match c {
+                    CalendarCmd::UseLink => self.use_calendar_link(),
+                    CalendarCmd::Refresh => {
+                        self.st.calendar.announce = true;
+                        self.fetch_calendar();
+                    }
+                    CalendarCmd::Forget => self.forget_calendar_link(),
+                },
                 Command::WantStats(b) => self.set_stats(b),
                 Command::SetAutostart(on) => {
                     self.st.ui.autostart = Some(on);

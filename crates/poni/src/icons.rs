@@ -78,6 +78,8 @@ pub enum Icon {
     Moon,
     /// Stop (the adzan): a rounded square.
     Stop,
+    /// Calendar add-on: a video camera (meetings and their calls).
+    Video,
     /// Record (Oyenza Studio Recorder): a dot that fits inside `Circle`.
     Record,
 }
@@ -264,6 +266,10 @@ pub fn parts(icon: Icon) -> &'static [Part] {
         Script => p![s("M10 6.5h10"), s("M10 12h10"), s("M10 17.5h6.5"), f("M3.6 9.3v5.4a.8.8 0 0 0 1.2.7l4.3-2.7a.8.8 0 0 0 0-1.4L4.8 8.6a.8.8 0 0 0-1.2.7z")],
         Stop => p![f("M8.2 6.5h7.6a1.7 1.7 0 0 1 1.7 1.7v7.6a1.7 1.7 0 0 1-1.7 1.7H8.2a1.7 1.7 0 0 1-1.7-1.7V8.2a1.7 1.7 0 0 1 1.7-1.7z")],
         Record => p![f("M6.5 12a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0z")],
+        Video => p![
+            s("M5 6.5h8.5A1.5 1.5 0 0 1 15 8v8a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 16V8A1.5 1.5 0 0 1 5 6.5z"),
+            s("M15 10.5l4.7-2.8a.5.5 0 0 1 .8.4v7.8a.5.5 0 0 1-.8.4L15 13.5"),
+        ],
     }
 }
 
@@ -280,6 +286,7 @@ mod tests {
         Icon::Sliders, Icon::Open, Icon::Phone, Icon::Eye, Icon::MoneyIn, Icon::MoneyOut, Icon::Transfer, Icon::Card, Icon::Wallet,
         Icon::Unlink, Icon::Gear,
         Icon::Gauge, Icon::App, Icon::Windows, Icon::Addons, Icon::Moon, Icon::Stop, Icon::Script, Icon::Record,
+        Icon::Video,
     ];
 
     #[test]
