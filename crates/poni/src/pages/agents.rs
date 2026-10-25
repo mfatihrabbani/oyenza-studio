@@ -1,22 +1,35 @@
 //! AI tab, while a Claude Code or Codex session has told the island about
 //! itself (`poni_core::agents`): one row per session, the ones that need you
 //! first, each with its folder, what it's doing and Open, which brings its
-//! window to the front. Finished sessions leave after half an hour, and the
-//! tab goes with the last one.
+//! window to the front. Each row carries its tool's mark (Claude's, or
+//! OpenAI's for Codex) with a dot for where it stands. Finished sessions
+//! leave after half an hour, and the tab goes with the last one.
 
 use crate::commands::Command;
 use crate::gfx::{TextStyle, Weight};
+use crate::icons::Icon;
 use crate::state::AppState;
 use crate::ui::{wid_n, PillStyle, Ui};
-use poni_core::agents::{status_line, State};
-use poni_core::geom::{palette, Point, Rect};
+use poni_core::agents::{status_line, State, Tool};
+use poni_core::geom::{palette, Color, Point, Rect};
 
 const HEIGHT: f32 = 146.0;
 const ROW_H: f32 = 29.0;
 const ROWS: usize = 5;
-const DOT_R: f32 = 4.0;
-const NAME_X: f32 = 18.0;
+const LOGO: f32 = 16.0;
+const DOT_R: f32 = 3.0;
+const NAME_X: f32 = 26.0;
 const PILL_H: f32 = 24.0;
+/// Claude's orange.
+const CLAUDE: Color = Color::hex(0xD97757);
+
+/// A tool's mark and the colour it's drawn in.
+pub fn tool_icon(t: Tool) -> (Icon, Color) {
+    match t {
+        Tool::Claude => (Icon::Claude, CLAUDE),
+        Tool::Codex => (Icon::OpenAi, palette::TEXT),
+    }
+}
 
 pub fn height(_st: &AppState) -> f32 {
     HEIGHT
@@ -35,7 +48,11 @@ pub fn draw(ui: &mut Ui, st: &mut AppState, area: Rect) {
             State::Working => accent,
             _ => palette::GREEN,
         };
-        ui.c.fill_circle(Point::new(r.x + DOT_R + 2.0, cy), DOT_R, dot);
+        let (icon, ink) = tool_icon(s.tool);
+        let logo = Rect::new(r.x + 1.0, cy - LOGO / 2.0, LOGO, LOGO);
+        ui.c.icon(icon, logo, ink);
+        // Where it stands, on the mark's corner.
+        ui.c.fill_circle(Point::new(logo.right() - 1.0, logo.bottom() - 1.0), DOT_R, dot);
 
         let w = ui.pill_width("Open", false, true);
         let pill = Rect::new(r.right() - w, cy - PILL_H / 2.0, w, PILL_H);

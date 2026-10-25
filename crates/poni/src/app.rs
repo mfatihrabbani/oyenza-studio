@@ -1308,7 +1308,8 @@ impl App {
             _ => (format!("{} is done", s.tool.name()), palette::GREEN, 12.0),
         };
         let subtitle = if s.message.is_empty() { s.title.clone() } else { format!("{} \u{b7} {}", s.title, s.message) };
-        self.st.notify(Icon::Agent, color, title, subtitle, secs, Some(NoticeAction::OpenPage(PageKind::Agents)));
+        let icon = pages::agents::tool_icon(s.tool).0;
+        self.st.notify(icon, color, title, subtitle, secs, Some(NoticeAction::OpenPage(PageKind::Agents)));
         self.st.set_notice_inline(InlineAction::OpenAgent);
         self.st.agents.notice_for = Some(s.key);
         self.st.chime();
