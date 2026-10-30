@@ -122,6 +122,16 @@ pub enum CalendarEvent {
     Failed(String),
 }
 
+/// How a recording ended (`services::recording`).
+#[derive(Clone, Debug)]
+pub enum RecordingEvent {
+    /// The file is finished. `low_disk`: it stopped because the disk was
+    /// nearly full; `stopped_by`: what else stopped it early.
+    Saved { path: String, secs: f64, low_disk: bool, stopped_by: Option<String> },
+    /// Nothing usable was recorded (the file is gone), and why.
+    Failed(String),
+}
+
 pub enum AppEvent {
     /// The current media session changed (None = nothing playing / no session).
     Media(Option<MediaSession>),
@@ -168,6 +178,7 @@ pub enum AppEvent {
     /// The adzan finished playing, or couldn't play on.
     AdzanEnded,
     Calendar(CalendarEvent),
+    Recording(RecordingEvent),
     /// Start with Windows is on (true) or off, read for the Settings page.
     Autostart(bool),
     /// Free-form log line from a service thread.

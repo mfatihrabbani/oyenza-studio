@@ -1687,7 +1687,7 @@ impl App {
             InlineAction::StartFocus => st.pomodoro.start(st.now),
             // The Mac app never plays the adzan (no Prayer times there yet),
             // and has no calendar reminders yet.
-            InlineAction::ShowAmount | InlineAction::StopAdzan | InlineAction::JoinMeeting | InlineAction::OpenAgent => {}
+            InlineAction::ShowAmount | InlineAction::StopAdzan | InlineAction::JoinMeeting | InlineAction::OpenAgent | InlineAction::StopRecording => {}
         }
         let until = st.now + INLINE_DONE_S;
         if let Some(n) = st.notice.as_mut() {
@@ -1775,7 +1775,8 @@ impl App {
                 Command::Play(s) => services::play(s == Sound::Chime),
                 Command::OpenUrl(u) => services::open(&u),
                 // No Calendar add-on or AI sessions on the Mac yet.
-                Command::Calendar(_) | Command::OpenAgent(_) => {}
+                // No calendar, AI sessions or recording on the Mac yet.
+                Command::Calendar(_) | Command::OpenAgent(_) | Command::ToggleRecording => {}
                 Command::SetSection(i) => {
                     if self.st.settings.sections.activate(i) {
                         self.save_settings();

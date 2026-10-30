@@ -43,6 +43,8 @@ const INK: Color = Color::white(1.0);
 /// widths, so the morphs between them match; wider once the countdown
 /// needs a third minute digit.
 const TIMER_W: f32 = 96.0;
+/// Recording: the dot and room for "1:23:45".
+const REC_W: f32 = 112.0;
 const TIMER_LONG_W: f32 = 112.0;
 const RING_D: f32 = 14.0;
 const RING_STROKE: f32 = 2.5;
@@ -83,6 +85,7 @@ pub fn geom(a: Activity, st: &AppState) -> Option<Geom> {
         Activity::MediaTimer => MEDIA_TIMER_W,
         Activity::Prayer => prayer_w(st),
         Activity::Game => game_w(st),
+        Activity::Recording => REC_W,
     };
     Some(capsule(w))
 }
@@ -94,6 +97,7 @@ pub fn draw(ui: &mut Ui, st: &mut AppState, a: Activity, body: Rect) -> bool {
         Activity::MediaTimer => draw_media_timer(ui, st, body),
         Activity::Prayer => draw_prayer(ui, st, body),
         Activity::Game => draw_game(ui, st, body),
+        Activity::Recording => crate::activities::draw_recording(ui, st, body),
     }
     true
 }

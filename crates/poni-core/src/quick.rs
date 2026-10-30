@@ -7,6 +7,7 @@
 //! - `/clip invoice`: copy the newest clipboard item with those words
 //! - `= 12*4500`: work it out and copy the result
 //! - `/section client`: switch to that section (`/section` alone: every tab)
+//! - `/rec`: start or stop recording the meeting's sound
 //!
 //! Pure parsing and arithmetic; the app looks up meetings and the clipboard.
 
@@ -22,12 +23,14 @@ pub enum Quick {
     Calc(Option<f64>),
     /// A section's name, or part of it (empty: every tab).
     Section(String),
+    /// Start or stop recording.
+    Record,
     /// A `/` the field doesn't know: the line lists the ones it does.
     Unknown,
 }
 
 /// What the line beside an unknown command says.
-pub const HELP: &str = "/join \u{b7} /focus \u{b7} /clip \u{b7} /section \u{b7} = sum";
+pub const HELP: &str = "/join \u{b7} /focus \u{b7} /clip \u{b7} /rec \u{b7} /section \u{b7} = sum";
 
 pub fn parse(text: &str) -> Option<Quick> {
     let t = text.trim();
@@ -50,6 +53,7 @@ pub fn parse(text: &str) -> Option<Quick> {
         },
         "clip" | "c" => Quick::Clip(arg.to_string()),
         "section" | "sec" => Quick::Section(arg.to_string()),
+        "rec" | "record" => Quick::Record,
         _ => Quick::Unknown,
     })
 }
@@ -181,6 +185,7 @@ mod tests {
         assert_eq!(parse("/clip"), Some(Quick::Clip(String::new())));
         assert_eq!(parse("/section client a"), Some(Quick::Section("client a".into())));
         assert_eq!(parse("/sec"), Some(Quick::Section(String::new())));
+        assert_eq!(parse("/rec"), Some(Quick::Record));
         assert_eq!(parse("/what"), Some(Quick::Unknown));
         assert_eq!(parse("/"), Some(Quick::Unknown));
         assert_eq!(parse("= 12*4500"), Some(Quick::Calc(Some(54000.0))));

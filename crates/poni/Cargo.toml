@@ -70,6 +70,7 @@ features = [
     "Win32_Media",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
+    "Win32_Media_MediaFoundation",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",
     "Win32_NetworkManagement_NetManagement",

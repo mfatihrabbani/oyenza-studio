@@ -129,4 +129,6 @@ pub enum Command {
     OpenAgent(String),
     /// Turn a section on (its index; `None`: every tab), and say so.
     SetSection(Option<usize>),
+    /// Start recording the meeting's sound, or stop the recording under way.
+    ToggleRecording,
 }

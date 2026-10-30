@@ -322,6 +322,12 @@ Make your own sets of tabs and switch between them with a key. Switch on **Secti
 
 **Alt+Shift+1** to **Alt+Shift+9** switch to sections 1–9, in the order they're listed; **Alt+Shift+0** shows every tab again. In quick add, `/section` and part of a name does the same (`/section` alone: every tab). The island says which section is on. Up to nine sections, kept in settings.json with the one that's on. The shortcuts are taken only while there are sections.
 
+### Recording a meeting's sound
+
+Press **Alt+Shift+R** in any app (or click the record button beside **MEETINGS** on the Today page, or type `/rec` in quick add) to record a meeting's sound; press it again to stop. While it records, the closed island shows a red dot and the time, and it starts with a reminder to let everyone know. It records your microphone and what the PC plays (the other people in Meet, Teams or Zoom), as stereo: you on the left, everyone else on the right. The file, AAC in an .m4a of about 43 MB an hour, goes to `Documents\Oyenza Recordings` named after the meeting on your calendar (`2026-10-30 10.00 Standup.m4a`), and onto the Shelf. On Windows.
+
+It won't start with less than 500 MB free, and stops by itself below 200 MB. If the meeting on the calendar has ended and it's still recording, the island says so. **Record meetings from any app** in the tray menu frees Alt+Shift+R. Nothing is sent anywhere, and nothing runs while it isn't recording.
+
 ### Phone drop
 
 Send photos and files from your phone to the Shelf, or save Shelf files on your phone, over your own Wi-Fi. Nothing to install on the phone, and it works with iPhones and Android phones alike.

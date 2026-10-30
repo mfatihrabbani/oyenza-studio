@@ -56,6 +56,7 @@ pub enum MenuCmd {
     SetTheme(Theme),
     ToggleClipboard,
     ToggleQuickAdd,
+    ToggleRecordHotkey,
     /// Put the island's hooks in Claude Code's settings, or take them out.
     ToggleClaudeHooks,
     /// The same with Codex's `notify`.
@@ -133,6 +134,7 @@ pub fn menu_items(s: &Settings, pinned: bool, oyenza: &OyenzaLink, recorder: boo
         oyenza_menu(s, oyenza),
         item("Clipboard history", MenuCmd::ToggleClipboard, s.clipboard_history),
         item("Quick add from any app (Alt+Shift+Space)", MenuCmd::ToggleQuickAdd, s.quick_add),
+        item("Record meetings from any app (Alt+Shift+R)", MenuCmd::ToggleRecordHotkey, s.record_hotkey),
         MenuItem::Sub {
             label: "AI sessions (Claude Code, Codex)".into(),
             items: vec![

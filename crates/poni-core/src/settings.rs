@@ -118,6 +118,8 @@ pub struct Settings {
     pub quick_add: bool,
     /// The person's sections and the one that's on (`sections`).
     pub sections: crate::sections::Sections,
+    /// Alt+Shift+R starts and stops recording a meeting's sound.
+    pub record_hotkey: bool,
 }
 
 /// What plays when a prayer's time comes.
@@ -187,6 +189,7 @@ impl Default for Settings {
             meeting_remind_min: 5,
             quick_add: true,
             sections: crate::sections::Sections::default(),
+            record_hotkey: true,
         }
     }
 }

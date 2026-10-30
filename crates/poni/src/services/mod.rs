@@ -24,6 +24,7 @@ pub mod phonedrop;
 pub mod power;
 pub mod psu;
 pub mod recorder;
+pub mod recording;
 pub mod romanize;
 #[cfg(test)]
 mod romanize_compare;

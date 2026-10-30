@@ -83,6 +83,21 @@ pub fn phone_inbox_dir() -> PathBuf {
     if before_rename.is_dir() { before_rename } else { downloads.join("Oyenza Studio") }
 }
 
+/// Where meeting recordings go: Documents\Oyenza Recordings.
+pub fn recordings_dir() -> PathBuf {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{FOLDERID_Documents, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
+    let documents = unsafe {
+        SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DEFAULT, HANDLE::default()).ok().and_then(|p| {
+            let s = p.to_string().ok();
+            CoTaskMemFree(Some(p.0 as *const _));
+            s.filter(|s| !s.is_empty()).map(PathBuf::from)
+        })
+    };
+    documents.unwrap_or_else(|| env_dir("USERPROFILE").join("Documents")).join("Oyenza Recordings")
+}
+
 fn downloads_dir() -> Option<PathBuf> {
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::System::Com::CoTaskMemFree;

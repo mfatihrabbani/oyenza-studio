@@ -95,7 +95,13 @@ pub fn draw_panel(ui: &mut Ui, st: &mut AppState, r: Rect, card: Option<(Rect, f
 
 /// "MEETINGS" on the left, the refresh button on the right.
 fn head(ui: &mut Ui, st: &mut AppState, r: Rect) {
-    ui.c.text("MEETINGS", Rect::new(r.x, r.y, r.w - 24.0, r.h), &TextStyle::caption().weight(Weight::Bold).color(st.accent));
+    ui.c.text("MEETINGS", Rect::new(r.x, r.y, r.w - 52.0, r.h), &TextStyle::caption().weight(Weight::Bold).color(st.accent));
+    // Record (or stop) the meeting's sound.
+    let rec = Rect::new(r.right() - 48.0, r.y, 20.0, r.h);
+    let (icon, ink) = if st.recording.is_some() { (Icon::Stop, crate::activities::REC_RED) } else { (Icon::Record, palette::TEXT_DIM) };
+    if ui.icon_button(wid("calendar.record"), rec, icon, ink, 13.0).clicked {
+        st.cmd(Command::ToggleRecording);
+    }
     let b = Rect::new(r.right() - 20.0, r.y, 20.0, r.h);
     let color = if st.calendar.fetching { palette::TEXT_FAINT } else { palette::TEXT_DIM };
     if ui.icon_button(wid("calendar.check"), b, Icon::Reset, color, 13.0).clicked && !st.calendar.fetching {

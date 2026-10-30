@@ -32,6 +32,8 @@ pub fn line(st: &AppState, q: &Quick) -> String {
             Some(i) => format!("\u{21b5} Section {}", st.settings.sections.list[i].name),
             None => "No section with that name".into(),
         },
+        Quick::Record if st.recording.is_some() => "\u{21b5} Stop recording".into(),
+        Quick::Record => "\u{21b5} Record the meeting's sound".into(),
         Quick::Unknown => quick::HELP.into(),
     }
 }
@@ -79,6 +81,7 @@ pub fn run(st: &mut AppState, q: &Quick) -> bool {
             };
             st.cmd(Command::SetSection(target));
         }
+        Quick::Record => st.cmd(Command::ToggleRecording),
         Quick::Calc(None) | Quick::Unknown => return false,
     }
     true

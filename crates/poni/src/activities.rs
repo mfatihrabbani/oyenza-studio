@@ -12,7 +12,7 @@ use crate::oyen;
 use crate::pages::{self, PageKind};
 use crate::state::{AppState, FpsAccess, HudKind, InlineAction};
 use crate::ui::{wid, PillStyle, Ui, PILL_SMALL};
-use poni_core::datetime::{fmt_clock, fmt_countdown};
+use poni_core::datetime::{fmt_clock, fmt_countdown, fmt_duration};
 use poni_core::frames::fmt_fps;
 use poni_core::geom::{clamp01, palette, Color, Point, Rect};
 use poni_core::pomodoro::Phase;
@@ -28,6 +28,8 @@ pub enum Activity {
     Prayer,
     /// Show over games: frame rate, GPU and CPU while a full-screen app is in front.
     Game,
+    /// A meeting's sound being recorded: a red dot and how long.
+    Recording,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +93,7 @@ pub fn content_key(m: &Mode) -> u32 {
         Mode::Activity(Activity::MediaTimer) => 4,
         Mode::Activity(Activity::Prayer) => 5,
         Mode::Activity(Activity::Game) => 6,
+        Mode::Activity(Activity::Recording) => 7,
         Mode::Hud(t) => 10 + *t as u32,
         Mode::Notice => 20,
         Mode::Expanded(_) => 30,
@@ -125,7 +128,21 @@ pub fn prayer_countdown(st: &AppState) -> Option<(poni_core::prayer::Prayer, i64
     poni_core::prayer::countdown(&site, st.prayer_now(), st.settings.prayer.remind_before_min).map(|(m, left)| (m.prayer, left))
 }
 
+/// The red dot shown while recording.
+pub const REC_RED: Color = palette::RED;
+/// The recording pill: the dot and room for "1:23:45".
+const REC_W: f32 = 104.0;
+
+/// Seconds recorded so far, while recording.
+pub fn recorded_secs(st: &AppState) -> Option<f64> {
+    st.recording.as_ref().map(|r| (st.now - r.since).max(0.0))
+}
+
 pub fn current_activity(st: &AppState) -> Option<Activity> {
+    // Recording comes first: it must never go unnoticed.
+    if st.recording.is_some() {
+        return Some(Activity::Recording);
+    }
     // The few minutes before a prayer come first: they don't come back.
     if prayer_countdown(st).is_some() {
         return Some(Activity::Prayer);
@@ -220,6 +237,7 @@ pub fn geom(m: &Mode, st: &AppState) -> Geom {
         }
         Mode::Activity(Activity::MediaTimer) => Geom::new(132.0, 32.0, 15.0),
         Mode::Activity(Activity::Prayer) => Geom::new(PRAYER_W, 32.0, 15.0),
+        Mode::Activity(Activity::Recording) => Geom::new(REC_W, 32.0, 15.0),
         Mode::Activity(Activity::Game) => Geom::new(if game_temp(st).is_some() { GAME_W } else { GAME_NO_TEMP_W }, 32.0, 15.0),
         Mode::Hud(HudTag::Volume) => Geom::new(316.0, 40.0, 19.0),
         Mode::Hud(HudTag::Charging) | Mode::Hud(HudTag::LowBattery) => Geom::new(300.0, 40.0, 19.0),
@@ -282,6 +300,10 @@ pub fn next_wake(m: &Mode, st: &AppState) -> Option<f64> {
     }
     if let Some(t) = crate::pill::next_wake(m, st) {
         consider(t);
+    }
+    // The recording's time ticks on whole seconds.
+    if let (Mode::Activity(Activity::Recording), Some(r)) = (m, st.recording.as_ref()) {
+        consider(r.since + (now - r.since).floor() + 1.0);
     }
     next
 }
@@ -523,6 +545,7 @@ fn draw_activity(ui: &mut Ui, st: &mut AppState, a: Activity, body: Rect) {
             ui.c.text(&text, Rect::new(body.x + 36.0, body.y, body.w - 36.0 - 16.0, body.h), &ts);
         }
         Activity::Game => draw_game(ui, st, body),
+        Activity::Recording => draw_recording(ui, st, body),
         Activity::MediaTimer => {
             // Art on the left; the ring sits right next to its countdown.
             art_or_icon(ui, st, art, playing);
@@ -538,6 +561,18 @@ fn draw_activity(ui: &mut Ui, st: &mut AppState, a: Activity, body: Rect) {
             ui.c.ring(c, 7.0, 2.2, p.progress(st.now), RING_TRACK, col);
         }
     }
+}
+
+/// "● 12:34": the red dot and the time recorded, centred.
+pub fn draw_recording(ui: &mut Ui, st: &AppState, body: Rect) {
+    let Some(secs) = recorded_secs(st) else { return };
+    let text = fmt_duration(secs);
+    let ts = TextStyle::body().weight(Weight::Semibold).tabular();
+    let (tw, _) = ui.c.measure(&text, &ts, 200.0);
+    let (dot, gap) = (5.0, 8.0);
+    let x0 = body.center().x - (2.0 * dot + gap + tw) / 2.0;
+    ui.c.fill_circle(Point::new(x0 + dot, body.center().y), dot, REC_RED);
+    ui.c.text(&text, Rect::new(x0 + 2.0 * dot + gap, body.y, tw + 2.0, body.h), &ts);
 }
 
 /// The GPU's temperature for the readout, when its driver reports one.
@@ -692,6 +727,7 @@ fn inline_done(st: &AppState, a: InlineAction) -> bool {
         // The calendar: the call opened (Join takes its link).
         InlineAction::JoinMeeting => st.calendar.join.is_none(),
         InlineAction::OpenAgent => st.agents.notice_for.is_none(),
+        InlineAction::StopRecording => st.recording.is_none(),
     }
 }
 
@@ -711,6 +747,7 @@ fn draw_notice(ui: &mut Ui, st: &mut AppState, body: Rect) {
             InlineAction::StopAdzan => ("Stop".to_string(), Icon::Stop, n.color),
             InlineAction::JoinMeeting => ("Join".to_string(), Icon::Open, n.color),
             InlineAction::OpenAgent => ("Open".to_string(), Icon::Open, n.color),
+            InlineAction::StopRecording => ("Stop".to_string(), Icon::Stop, REC_RED),
         };
         let w = ui.pill_width(&label, true, true).max(76.0);
         let r = Rect::new(body.right() - 16.0 - w, cy - PILL_SMALL / 2.0, w, PILL_SMALL);

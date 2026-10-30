@@ -4,7 +4,7 @@
 use crate::activities::{self, Mode};
 use crate::clock;
 use crate::commands::{CalendarCmd, Command, MediaCmd, OyenzaCmd, PairCmd, PhoneCmd};
-use crate::events::{AppEvent, AppleMusicStatus, CalendarEvent, EventSink, OyenzaEvent, SendHwnd, WM_APP_APPBAR, WM_APP_EVENT, WM_APP_FRAME, WM_APP_TRAY};
+use crate::events::{AppEvent, AppleMusicStatus, CalendarEvent, EventSink, OyenzaEvent, RecordingEvent, SendHwnd, WM_APP_APPBAR, WM_APP_EVENT, WM_APP_FRAME, WM_APP_TRAY};
 use crate::gfx::{px_rect, px_union, scale_about, union_rect, Canvas, Gfx, HitMask};
 use crate::icons::Icon;
 use crate::island::{Geom, Island, SHOULDER};
@@ -68,6 +68,8 @@ const HOTKEY_PEEK: i32 = 1;
 const HOTKEY_SCRIPT: i32 = 2;
 /// Alt+Shift+Space opens the Tasks page's field from any app (quick add).
 const HOTKEY_QUICK: i32 = 3;
+/// Alt+Shift+R starts and stops recording a meeting's sound.
+const HOTKEY_RECORD: i32 = 4;
 /// Alt+Shift+0–9 switch sections (0: every tab): ids 10 to 19.
 const HOTKEY_SECTION_0: i32 = 10;
 /// Raises that follow a new foreground window, and their spacing.
@@ -382,6 +384,9 @@ pub struct App {
     script_hotkey: bool,
     quick_hotkey: bool,
     section_hotkeys: bool,
+    record_hotkey: bool,
+    /// The recording under way (`services::recording`).
+    recorder: Option<services::recording::Recorder>,
     /// The Script page has asked for the island to stay out of screen capture.
     script_excluded: bool,
     /// A reading held the island open at the last tick.
@@ -567,6 +572,8 @@ impl App {
             script_hotkey: false,
             quick_hotkey: false,
             section_hotkeys: false,
+            record_hotkey: false,
+            recorder: None,
             script_excluded: false,
             script_held: false,
             script_shown: false,
@@ -643,6 +650,9 @@ impl App {
         self.set_script_hotkey(false);
         self.set_quick_hotkey(false);
         self.set_section_hotkeys(false);
+        self.set_record_hotkey(false);
+        // A recording under way finishes its file before Poni goes.
+        self.recorder = None;
         self.glass.stop(self.hwnd, &mut self.gfx);
         if let Some(p) = self.phone.take() {
             p.stop();
@@ -1149,6 +1159,11 @@ impl App {
                 let n = wp.0 - HOTKEY_SECTION_0 as usize;
                 self.refresh_time();
                 self.set_section(if n == 0 { None } else { Some(n - 1) });
+                self.request_frame();
+                Some(LRESULT(0))
+            }
+            WM_HOTKEY if wp.0 == HOTKEY_RECORD as usize => {
+                self.toggle_recording();
                 self.request_frame();
                 Some(LRESULT(0))
             }
@@ -1873,6 +1888,7 @@ impl App {
             SetTheme(theme) => s.theme = theme,
             ToggleClipboard => s.clipboard_history = !s.clipboard_history,
             ToggleQuickAdd => s.quick_add = !s.quick_add,
+            ToggleRecordHotkey => s.record_hotkey = !s.record_hotkey,
             ToggleClaudeHooks => self.toggle_agent_setup(true),
             ToggleCodexNotify => self.toggle_agent_setup(false),
             CopyClaudeHooks | CopyCodexNotify => {
@@ -2182,6 +2198,7 @@ impl App {
             AppEvent::Located(found) => self.on_located(found),
             AppEvent::AdzanEnded => self.adzan_ended(),
             AppEvent::Calendar(ev) => self.on_calendar(ev),
+            AppEvent::Recording(ev) => self.on_recording(ev),
             AppEvent::Log(s) => pinfo!("{s}"),
         }
         if let Some(before) = media_before {
@@ -2504,6 +2521,97 @@ impl App {
                 self.quick_hotkey = false;
             }
         }
+    }
+
+    /// Alt+Shift+R, while the tray's switch for it is on.
+    fn set_record_hotkey(&mut self, on: bool) {
+        if on == self.record_hotkey {
+            return;
+        }
+        self.record_hotkey = on;
+        unsafe {
+            if on {
+                if let Err(e) = RegisterHotKey(self.helper, HOTKEY_RECORD, MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, u32::from(b'R')) {
+                    pwarn!("recording: Alt+Shift+R is taken ({e})");
+                }
+            } else {
+                let _ = UnregisterHotKey(self.helper, HOTKEY_RECORD);
+            }
+        }
+    }
+
+    /// Start recording the meeting's sound, or stop the recording under way.
+    /// A meeting on now (or about to start) names the file.
+    fn toggle_recording(&mut self) {
+        self.refresh_time();
+        if self.recorder.take().is_some() {
+            // The file finishes on the recording's thread; `on_recording` hears.
+            pinfo!("recording: stopping");
+            return;
+        }
+        let unix = self.st.unix;
+        let meeting = if self.st.calendar_on() {
+            self.st.calendar.meetings.iter().find(|m| m.start - 10 * 60 <= unix && unix < m.end).cloned()
+        } else {
+            None
+        };
+        let name = poni_core::recording::file_name(meeting.as_ref().map(|m| m.title.as_str()), &self.st.local);
+        let path = paths::recordings_dir().join(&name);
+        match services::recording::Recorder::start(path, self.sink.clone()) {
+            Ok(r) => {
+                self.recorder = Some(r);
+                let title = meeting.as_ref().map_or_else(|| "Recording".to_string(), |m| m.title.clone());
+                self.st.recording = Some(crate::state::RecordingState { since: self.st.now, title: title.clone(), meeting_ends: meeting.map(|m| m.end), reminded: false });
+                self.st.notify(Icon::Record, crate::activities::REC_RED, format!("Recording \u{b7} {title}"), "Let everyone know you're recording", 5.0, None);
+                self.st.set_notice_inline(InlineAction::StopRecording);
+                pinfo!("recording: started");
+            }
+            Err(why) => {
+                pwarn!("recording: not started ({why})");
+                self.st.notify(Icon::Record, palette::ORANGE, "Couldn't start recording", why, 6.0, None);
+            }
+        }
+    }
+
+    /// A recording ended: its file goes on the Shelf.
+    fn on_recording(&mut self, ev: RecordingEvent) {
+        self.refresh_time();
+        self.recorder = None;
+        self.st.recording = None;
+        match ev {
+            RecordingEvent::Saved { path, secs, low_disk, stopped_by } => {
+                self.st.store.shelf.add_paths(std::slice::from_ref(&path), self.st.unix);
+                self.st.save();
+                let length = poni_core::datetime::fmt_duration(secs);
+                let title = if low_disk {
+                    "Recording stopped: the disk is nearly full".to_string()
+                } else if let Some(why) = stopped_by {
+                    format!("Recording stopped: {why}")
+                } else {
+                    "Recording saved".to_string()
+                };
+                self.st.notify(Icon::Record, if low_disk { palette::ORANGE } else { palette::GREEN }, title, format!("{length} \u{b7} on the Shelf"), 6.0, Some(NoticeAction::OpenPage(PageKind::Shelf)));
+                pinfo!("recording: saved, {length}");
+            }
+            RecordingEvent::Failed(why) => {
+                pwarn!("recording: failed ({why})");
+                self.st.notify(Icon::Record, palette::ORANGE, "Recording failed", why, 6.0, None);
+            }
+        }
+        self.request_frame();
+    }
+
+    /// The meeting being recorded is over: say once that it still records.
+    fn recording_tick(&mut self) {
+        let unix = self.st.unix;
+        let Some(r) = self.st.recording.as_mut() else { return };
+        if r.reminded || r.meeting_ends.is_none_or(|end| unix < end + 2 * 60) {
+            return;
+        }
+        r.reminded = true;
+        let title = r.title.clone();
+        self.st.notify(Icon::Record, crate::activities::REC_RED, "Still recording", format!("{title} has ended"), 20.0, None);
+        self.st.set_notice_inline(InlineAction::StopRecording);
     }
 
     /// Alt+Shift+0–9 belong to Poni only while there are sections to switch.
@@ -2932,6 +3040,8 @@ impl App {
         self.prayer_tick();
         self.calendar_tick();
         self.set_quick_hotkey(self.st.settings.quick_add && self.selftest.is_none());
+        self.set_record_hotkey(self.st.settings.record_hotkey && self.selftest.is_none());
+        self.recording_tick();
         self.set_section_hotkeys(self.st.sections_on() && !self.st.settings.sections.list.is_empty() && self.selftest.is_none());
         self.script_tick();
         // AI sessions: finished ones leave after a while; with the last one, the tab goes.
@@ -3473,6 +3583,7 @@ impl App {
                     st.cmd(Command::OpenAgent(key));
                 }
             }
+            InlineAction::StopRecording => st.cmd(Command::ToggleRecording),
             InlineAction::ShowAmount | InlineAction::StopAdzan => {}
         }
         let until = st.now + INLINE_DONE_S;
@@ -3764,6 +3875,7 @@ impl App {
                 Command::OpenUrl(u) => shell::open(&u),
                 Command::OpenAgent(key) => self.open_agent(&key),
                 Command::SetSection(i) => self.set_section(i),
+                Command::ToggleRecording => self.toggle_recording(),
                 Command::Calendar(c) => match c {
                     CalendarCmd::UseLink => self.use_calendar_link(),
                     CalendarCmd::Refresh => {

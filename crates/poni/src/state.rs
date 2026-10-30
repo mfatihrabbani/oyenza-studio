@@ -147,6 +147,8 @@ pub enum InlineAction {
     StopAdzan,
     /// Bring the AI session the notice is about to the front (`AgentsState::notice_for`).
     OpenAgent,
+    /// Stop the recording under way.
+    StopRecording,
     /// Open the meeting's video call (`CalendarState::join`).
     JoinMeeting,
 }
@@ -445,6 +447,18 @@ pub struct CalendarState {
     pub join: Option<String>,
 }
 
+/// A recording under way (`services::recording`).
+#[derive(Clone, Debug)]
+pub struct RecordingState {
+    /// When it started (mono seconds).
+    pub since: f64,
+    pub title: String,
+    /// When the meeting it records ends (UTC seconds), if it's one on the
+    /// calendar, and whether the island already said it's still recording.
+    pub meeting_ends: Option<i64>,
+    pub reminded: bool,
+}
+
 /// AI sessions that told the island about themselves (`services::agents`).
 #[derive(Clone, Debug, Default)]
 pub struct AgentsState {
@@ -507,6 +521,7 @@ pub struct AppState {
     pub prayer: PrayerState,
     pub calendar: CalendarState,
     pub agents: AgentsState,
+    pub recording: Option<RecordingState>,
     /// The Script page's reading (its script and pace are in `store.script`).
     pub script: poni_core::script::Reader,
     /// A message under the script until a time (mono seconds).
@@ -580,6 +595,7 @@ impl AppState {
             prayer: PrayerState::default(),
             calendar: CalendarState::default(),
             agents: AgentsState::default(),
+            recording: None,
             script: poni_core::script::Reader::default(),
             script_note: None,
             script_hidden: None,
