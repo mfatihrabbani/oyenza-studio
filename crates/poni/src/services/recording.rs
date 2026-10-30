@@ -75,7 +75,7 @@ fn run(path: PathBuf, stop: Arc<AtomicBool>, sink: EventSink) {
     let event = unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let started = MFStartup(MF_VERSION, MFSTARTUP_FULL);
-        let out = match started {
+        let out = match &started {
             Ok(()) => record(&path, &stop),
             Err(e) => Err(format!("Media Foundation didn't start ({e})")),
         };
