@@ -141,8 +141,18 @@ pub const SECTIONS: Addon = Addon {
     files: &[],
 };
 
+/// Notes: sticky notes written right in the island (`notes`). Built in.
+pub const NOTES: Addon = Addon {
+    id: "notes",
+    title: "Notes",
+    blurb: "Sticky notes, written right in the island.",
+    mac_blurb: None,
+    tag: "",
+    files: &[],
+};
+
 /// Every add-on, in the order the Add-ons page lists them.
-pub const ALL: [&Addon; 5] = [&PRAYER_TIMES, &JAPANESE_READINGS, &SCRIPT_READER, &CALENDAR, &SECTIONS];
+pub const ALL: [&Addon; 6] = [&PRAYER_TIMES, &JAPANESE_READINGS, &SCRIPT_READER, &CALENDAR, &SECTIONS, &NOTES];
 
 /// Whether Japanese readings switch themselves on for a song whose kanji went
 /// unread for want of them (`wants`): only while the person reads

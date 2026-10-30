@@ -20,13 +20,12 @@ use poni_core::geom::{palette, Color, Point, Rect};
 use poni_core::phonedrop::fmt_bytes;
 
 const INTRO_H: f32 = 18.0;
-/// Five add-ons or more leave out the line above them, so the page stays
-/// within the window (the Tasks page's height).
-const MANY: bool = OFFERED.len() > 4;
-const ROWS_Y: f32 = if MANY { 0.0 } else { 28.0 };
-/// Rows are a little shorter once there are four, so the page stays within
-/// the window (the Tasks page's height).
-const ROW_H: f32 = if MANY { 40.0 } else if OFFERED.len() > 3 { 43.0 } else { 52.0 };
+const ROWS_Y: f32 = 28.0;
+const ROW_H: f32 = 52.0;
+/// The page is no taller than the window (the Tasks page's height); more
+/// add-ons than fit scroll under the intro.
+const MAX_H: f32 = 200.0;
+const WHEEL_STEP: f32 = ROW_H;
 /// A row's name, its line and the download bar, from this far down the row.
 const TEXT_TOP: f32 = (ROW_H - 41.0) / 2.0;
 const BADGE: f32 = 36.0;
@@ -45,7 +44,7 @@ pub const OFFERED: &[&Addon] = if cfg!(windows) { &addons::ALL } else { &[&addon
 const MAC: bool = cfg!(target_os = "macos");
 
 pub fn height(_st: &AppState) -> f32 {
-    ROWS_Y + OFFERED.len() as f32 * ROW_H
+    (ROWS_Y + OFFERED.len() as f32 * ROW_H).min(MAX_H)
 }
 
 /// Each add-on's icon on its badge.
@@ -56,24 +55,36 @@ fn icon(a: &Addon) -> Icon {
         "script" => Icon::Script,
         "calendar" => Icon::Video,
         "sections" => Icon::Layers,
+        "notes" => Icon::File,
         _ => Icon::Addons,
     }
 }
 
 pub fn draw(ui: &mut Ui, st: &mut AppState, area: Rect) {
-    if !MANY {
-        let intro = "Each one stays off until you switch it on, and switching off deletes any download.";
-        ui.c.text(intro, Rect::new(area.x, area.y, area.w, INTRO_H), &TextStyle::footnote().color(palette::TEXT_DIM));
-    }
+    let intro = "Each one stays off until you switch it on, and switching off deletes any download.";
+    ui.c.text(intro, Rect::new(area.x, area.y, area.w, INTRO_H), &TextStyle::footnote().color(palette::TEXT_DIM));
     // The last row's hover wash meets the Pill card's rounded corners.
     let card = super::clipboard::pill_card(st, area);
+    let view = Rect::new(area.x - 10.0, area.y + ROWS_Y, area.w + 20.0, height(st) - ROWS_Y);
+    let max_scroll = (OFFERED.len() as f32 * ROW_H - view.h).max(0.0);
+    st.ui.addons_scroll = (st.ui.addons_scroll - ui.wheel_in(view) * WHEEL_STEP).clamp(0.0, max_scroll);
+    let scroll = st.ui.addons_scroll;
+    ui.c.clip(view);
+    let mut toggled = None;
     for (i, a) in OFFERED.iter().enumerate() {
-        let row = Rect::new(area.x, area.y + ROWS_Y + i as f32 * ROW_H, area.w, ROW_H);
-        if addon_row(ui, st, row, i, a, card) {
-            let on = st.settings.addon_on(a.id);
-            st.settings.set_addon(a.id, !on);
-            st.cmd(Command::SaveSettings);
+        let row = Rect::new(area.x, view.y + i as f32 * ROW_H - scroll, area.w, ROW_H);
+        if row.bottom() <= view.y || row.y >= view.bottom() {
+            continue;
         }
+        if addon_row(ui, st, row, i, a, card) {
+            toggled = Some(a);
+        }
+    }
+    ui.c.unclip();
+    if let Some(a) = toggled {
+        let on = st.settings.addon_on(a.id);
+        st.settings.set_addon(a.id, !on);
+        st.cmd(Command::SaveSettings);
     }
 }
 

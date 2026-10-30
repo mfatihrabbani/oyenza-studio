@@ -254,6 +254,17 @@ pub struct PageUiState {
     pub section_rename: String,
     pub section_scroll: f32,
     pub section_note: Option<(&'static str, f64)>,
+    /// Notes tab: the note open on the right, its text as it's written, the
+    /// text's and the list's scroll, the search, and the note just deleted
+    /// (for Undo, since when).
+    pub note_open: Option<u64>,
+    pub note_text: String,
+    pub note_text_scroll: f32,
+    pub note_scroll: f32,
+    pub note_search: String,
+    pub note_undo: Option<(poni_core::notes::Note, f64)>,
+    /// The Add-ons page's scroll.
+    pub addons_scroll: f32,
     pub task_input: String,
     pub task_scroll: f32,
     pub clip_scroll: f32,
@@ -626,6 +637,11 @@ impl AppState {
     /// The Script reader add-on is on: the Script tab shows.
     pub fn script_on(&self) -> bool {
         self.addon(poni_core::addons::SCRIPT_READER.id) == AddonStatus::Ready
+    }
+
+    /// The Notes add-on is on: its tab shows.
+    pub fn notes_on(&self) -> bool {
+        self.addon(poni_core::addons::NOTES.id) == AddonStatus::Ready
     }
 
     /// The Sections add-on is on: its tab shows and the section that's on

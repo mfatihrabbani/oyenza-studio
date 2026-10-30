@@ -46,6 +46,8 @@ pub struct Store {
     pub oyenza_noticed: Vec<String>,
     /// The Script page's script and its pace.
     pub script: crate::script::Script,
+    /// The Notes add-on's sticky notes.
+    pub notes: crate::notes::NoteList,
 }
 
 impl Default for Store {
@@ -59,6 +61,7 @@ impl Default for Store {
             last_page: String::new(),
             oyenza_noticed: Vec::new(),
             script: crate::script::Script::default(),
+            notes: crate::notes::NoteList::default(),
         }
     }
 }

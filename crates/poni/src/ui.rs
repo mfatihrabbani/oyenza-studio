@@ -360,6 +360,13 @@ impl<'a, 'g> Ui<'a, 'g> {
         }
     }
 
+    /// Give field `id` the keyboard, the caret at `caret` (a note just made).
+    pub fn focus(&mut self, id: WidgetId, caret: usize) {
+        self.input.focused = Some(id);
+        self.input.caret = caret;
+        self.wants_focus = Some(true);
+    }
+
     /// Single-line text field. Click to focus, Enter submits, Esc cancels.
     pub fn text_input(&mut self, id: WidgetId, r: Rect, buf: &mut String, placeholder: &str, max_chars: usize) -> TextInputResp {
         self.text_input_styled(id, r, buf, placeholder, max_chars, InputLook::Box)
@@ -465,6 +472,138 @@ impl<'a, 'g> Ui<'a, 'g> {
         out
     }
 
+    /// Multi-line text field (a note): Enter starts a new line, text wraps
+    /// at the field's width, ↑↓ move between lines, the wheel scrolls, Esc
+    /// lets go. Click to focus; a click inside a focused field moves the caret.
+    /// `scroll` (DIPs) is the caller's to keep.
+    #[allow(clippy::too_many_arguments)]
+    pub fn text_area(&mut self, id: WidgetId, r: Rect, buf: &mut String, placeholder: &str, max_chars: usize, scroll: &mut f32, ink: Color) -> TextInputResp {
+        const LINE_H: f32 = 19.0;
+        let resp = self.interact(id, r, CursorKind::Text);
+        let mut out = TextInputResp::default();
+        let st = TextStyle::new(crate::gfx::ts::BODY).color(ink);
+        let mut chars: Vec<char> = buf.chars().collect();
+        let mut lines = wrap_lines(self.c, &chars, r.w, &st);
+        if resp.clicked {
+            let first = self.input.focused != Some(id);
+            self.input.focused = Some(id);
+            self.wants_focus = Some(true);
+            self.input.caret = match self.input.mouse {
+                Some(m) if !first || !chars.is_empty() => caret_at(self.c, &chars, &lines, &st, m.x - r.x, m.y - r.y + *scroll, LINE_H),
+                _ => chars.len(),
+            };
+        }
+        let focused = self.input.focused == Some(id);
+        out.focused = focused;
+        let mut caret = self.input.caret.min(chars.len());
+        if focused {
+            let keys = std::mem::take(&mut self.input.keys);
+            let mut changed = false;
+            // The lines are laid out again only when a key needs them after an edit.
+            let mut stale = false;
+            for k in keys {
+                if stale && matches!(k, KeyInput::Up | KeyInput::Down | KeyInput::Home | KeyInput::End) {
+                    lines = wrap_lines(self.c, &chars, r.w, &st);
+                    stale = false;
+                }
+                let (line, col) = line_of(&lines, caret);
+                let len = chars.len();
+                match k {
+                    KeyInput::Char(c) if (c == '\n' || !c.is_control()) && len < max_chars => {
+                        chars.insert(caret, c);
+                        caret += 1;
+                    }
+                    KeyInput::Enter if len < max_chars => {
+                        chars.insert(caret, '\n');
+                        caret += 1;
+                    }
+                    KeyInput::Backspace if caret > 0 => {
+                        caret -= 1;
+                        chars.remove(caret);
+                    }
+                    KeyInput::Delete if caret < len => {
+                        chars.remove(caret);
+                    }
+                    KeyInput::Left => caret = caret.saturating_sub(1),
+                    KeyInput::Right => caret = (caret + 1).min(chars.len()),
+                    // Up and down keep the column, as far as the line goes.
+                    KeyInput::Up if line > 0 => {
+                        let (s, e) = lines[line - 1];
+                        caret = (s + col).min(e);
+                    }
+                    KeyInput::Down if line + 1 < lines.len() => {
+                        let (s, e) = lines[line + 1];
+                        caret = (s + col).min(e);
+                    }
+                    KeyInput::Home => caret = lines[line].0,
+                    KeyInput::End => caret = lines[line].1,
+                    KeyInput::SelectAll => caret = chars.len(),
+                    KeyInput::Escape => out.cancelled = true,
+                    _ => {}
+                }
+                if chars.len() != len {
+                    changed = true;
+                    stale = true;
+                }
+            }
+            if changed {
+                out.changed = true;
+                *buf = chars.iter().collect();
+            }
+            self.input.caret = caret;
+            if out.cancelled {
+                self.input.focused = None;
+                self.wants_focus = Some(false);
+            }
+            if out.changed || out.cancelled {
+                self.repaint = true;
+            }
+        }
+        // The lines as they are after this frame's typing.
+        let lines = if out.changed { wrap_lines(self.c, &chars, r.w, &st) } else { lines };
+        let content_h = lines.len() as f32 * LINE_H;
+        let max_scroll = (content_h - r.h).max(0.0);
+        if self.hovered(r) && self.input.wheel != 0.0 {
+            *scroll -= self.input.wheel * LINE_H * 2.0;
+            self.input.wheel = 0.0;
+            self.repaint = true;
+        }
+        let (cl, cc) = line_of(&lines, caret);
+        if focused {
+            // Keep the caret in view.
+            let cy = cl as f32 * LINE_H;
+            if cy < *scroll {
+                *scroll = cy;
+            } else if cy + LINE_H > *scroll + r.h {
+                *scroll = cy + LINE_H - r.h;
+            }
+        }
+        *scroll = scroll.clamp(0.0, max_scroll);
+
+        self.c.clip(r);
+        if chars.is_empty() {
+            self.c.text(placeholder, Rect::new(r.x, r.y, r.w, LINE_H), &st.color(palette::TEXT_FAINT));
+        }
+        for (i, (s, e)) in lines.iter().enumerate() {
+            let y = r.y + i as f32 * LINE_H - *scroll;
+            if y + LINE_H < r.y || y > r.bottom() {
+                continue;
+            }
+            let text: String = chars[*s..*e].iter().collect();
+            self.c.text(&text, Rect::new(r.x, y, r.w + 4.0, LINE_H), &st);
+        }
+        if focused {
+            let (s, _) = lines[cl];
+            let before: String = chars[s..s + cc].iter().collect();
+            let w = if before.is_empty() { 0.0 } else { self.c.measure(&before, &st, 100_000.0).0 };
+            let x = (r.x + w + 0.5).min(r.right());
+            let y = r.y + cl as f32 * LINE_H - *scroll;
+            self.c.line(Point::new(x, y + 2.0), Point::new(x, y + LINE_H - 2.0), ink, 1.5);
+        }
+        self.c.unclip();
+        out
+    }
+
     /// Horizontal progress bar. When `seekable` it can be clicked or dragged:
     /// while held it shows (and reports) the fraction under the pointer, and
     /// the release reports where to seek, even if the pointer slid off the bar.
@@ -495,4 +634,92 @@ impl<'a, 'g> Ui<'a, 'g> {
             self.wants_focus = Some(false);
         }
     }
+}
+
+/// The visual lines of `chars` wrapped to `width`: (start, end) char
+/// ranges, the newline left out; spaces where a line wraps belong to no line.
+fn wrap_lines(c: &mut crate::gfx::Canvas, chars: &[char], width: f32, st: &TextStyle) -> Vec<(usize, usize)> {
+    let n = chars.len();
+    let mut width_of = |a: usize, b: usize| -> f32 {
+        let s: String = chars[a..b].iter().collect();
+        c.measure(&s, st, 100_000.0).0
+    };
+    let mut out = Vec::new();
+    let mut para = 0;
+    loop {
+        let end = chars[para..].iter().position(|ch| *ch == '\n').map_or(n, |p| para + p);
+        let mut start = para;
+        if start == end {
+            out.push((start, end));
+        }
+        while start < end {
+            // As many words as fit…
+            let (mut fit, mut j) = (start, start);
+            while j < end {
+                let mut k = j;
+                while k < end && chars[k] == ' ' {
+                    k += 1;
+                }
+                while k < end && chars[k] != ' ' {
+                    k += 1;
+                }
+                if width_of(start, k) > width {
+                    break;
+                }
+                fit = k;
+                j = k;
+            }
+            // …or, for a word longer than the line, as many characters.
+            if fit == start {
+                fit = start + 1;
+                while fit < end && width_of(start, fit + 1) <= width {
+                    fit += 1;
+                }
+            }
+            out.push((start, fit));
+            start = fit;
+            if start < end {
+                while start < end && chars[start] == ' ' {
+                    start += 1;
+                }
+                if start == end {
+                    // Spaces typed at the end of a full line: keep them visible.
+                    if let Some(last) = out.last_mut() {
+                        last.1 = end;
+                    }
+                }
+            }
+        }
+        if end >= n {
+            return out;
+        }
+        para = end + 1;
+    }
+}
+
+/// The line holding `caret`, and its column in that line.
+fn line_of(lines: &[(usize, usize)], caret: usize) -> (usize, usize) {
+    let i = lines.iter().rposition(|(s, _)| *s <= caret).unwrap_or(0);
+    let (s, e) = lines.get(i).copied().unwrap_or((0, 0));
+    (i, caret.min(e).saturating_sub(s))
+}
+
+/// The caret position nearest a point (`x`, `y` from the text's top left).
+fn caret_at(c: &mut crate::gfx::Canvas, chars: &[char], lines: &[(usize, usize)], st: &TextStyle, x: f32, y: f32, line_h: f32) -> usize {
+    let Some(&(s, e)) = lines.get(((y / line_h).floor().max(0.0) as usize).min(lines.len().saturating_sub(1))) else { return chars.len() };
+    let mut best = s;
+    for i in s..=e {
+        let w = if i == s { 0.0 } else { c.measure(&chars[s..i].iter().collect::<String>(), st, 100_000.0).0 };
+        if w <= x {
+            best = i;
+        } else {
+            // Nearer the next character's left edge than this one's?
+            let prev = if best == s { 0.0 } else { c.measure(&chars[s..best].iter().collect::<String>(), st, 100_000.0).0 };
+            if w - x < x - prev {
+                best = i;
+            }
+            break;
+        }
+    }
+    best
 }

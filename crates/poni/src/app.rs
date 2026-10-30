@@ -1028,7 +1028,8 @@ impl App {
                         VK_END => Some(KeyInput::End),
                         VK_V if unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0 => {
                             if let Some(text) = services::clipboard::read_text(self.hwnd) {
-                                for c in text.chars().filter(|c| !c.is_control()) {
+                                // Line breaks come as '\n' (a note keeps them; one-line fields skip them).
+                                for c in text.chars().filter(|c| *c == '\n' || !c.is_control()) {
                                     self.input.keys.push(KeyInput::Char(c));
                                 }
                             }

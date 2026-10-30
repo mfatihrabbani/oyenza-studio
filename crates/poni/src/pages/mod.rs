@@ -16,6 +16,7 @@ pub mod clipboard;
 pub mod focus;
 pub mod health;
 pub mod media;
+pub mod notes;
 pub mod oyenza;
 pub mod prayer;
 pub mod quick;
@@ -70,6 +71,8 @@ pub enum PageKind {
     Prayer,
     /// The person's sections, while that add-on is on ([`tabs`]).
     Sections,
+    /// Sticky notes, while that add-on is on ([`tabs`]).
+    Notes,
     /// The "+" at the end of the tab row: features to switch on, each of
     /// which downloads only then (`poni_core::addons`).
     Addons,
@@ -78,7 +81,7 @@ pub enum PageKind {
 }
 
 impl PageKind {
-    pub const ALL: [PageKind; 15] = [
+    pub const ALL: [PageKind; 16] = [
         PageKind::Media,
         PageKind::Focus,
         PageKind::Health,
@@ -92,6 +95,7 @@ impl PageKind {
         PageKind::Agents,
         PageKind::Prayer,
         PageKind::Sections,
+        PageKind::Notes,
         PageKind::Addons,
         PageKind::Settings,
     ];
@@ -111,6 +115,7 @@ impl PageKind {
             PageKind::Agents => "agents",
             PageKind::Prayer => "prayer",
             PageKind::Sections => "sections",
+            PageKind::Notes => "notes",
             PageKind::Addons => "addons",
             PageKind::Settings => "settings",
         }
@@ -137,6 +142,7 @@ impl PageKind {
             PageKind::Agents => "AI",
             PageKind::Prayer => "Prayer",
             PageKind::Sections => "Sections",
+            PageKind::Notes => "Notes",
             PageKind::Addons => "Add-ons",
             PageKind::Settings => "Settings",
         }
@@ -157,6 +163,7 @@ impl PageKind {
             PageKind::Agents => Icon::Agent,
             PageKind::Prayer => Icon::Moon,
             PageKind::Sections => Icon::Layers,
+            PageKind::Notes => Icon::File,
             PageKind::Addons => Icon::Addons,
             PageKind::Settings => Icon::Gear,
         }
@@ -200,6 +207,7 @@ pub(crate) fn available(st: &AppState, p: PageKind) -> bool {
         PageKind::Prayer => st.prayer_on(),
         PageKind::Script => st.script_on(),
         PageKind::Sections => st.sections_on(),
+        PageKind::Notes => st.notes_on(),
         p => p.tabbed(),
     }
 }
@@ -227,6 +235,7 @@ pub fn content_height(p: PageKind, st: &AppState) -> f32 {
         PageKind::Agents => agents::height(st),
         PageKind::Prayer => prayer::height(st),
         PageKind::Sections => sections::height(st),
+        PageKind::Notes => notes::height(st),
         PageKind::Addons => addons::height(st),
         PageKind::Settings => settings::height(st),
     }
@@ -245,6 +254,7 @@ pub fn next_wake(page: PageKind, st: &AppState) -> Option<f64> {
         PageKind::Settings => settings::next_wake(st),
         PageKind::Script => script::next_wake(st),
         PageKind::Prayer => prayer::next_wake(st),
+        PageKind::Notes => notes::next_wake(st),
         _ => None,
     };
     // Oyen in the header blinks and flicks an ear now and then.
@@ -359,6 +369,7 @@ pub(crate) fn draw_page(ui: &mut Ui, st: &mut AppState, area: Rect, page: PageKi
         PageKind::Agents => agents::draw(ui, st, area),
         PageKind::Prayer => prayer::draw(ui, st, area),
         PageKind::Sections => sections::draw(ui, st, area),
+        PageKind::Notes => notes::draw(ui, st, area),
         PageKind::Addons => addons::draw(ui, st, area),
         PageKind::Settings => settings::draw(ui, st, area),
     }
@@ -707,6 +718,15 @@ mod tests {
         assert!(tabs(&st).len() > 3 && tabs(&st).contains(&PageKind::Sections));
         assert!(content_height(PageKind::Sections, &st) <= content_height(PageKind::Tasks, &st));
         assert!(content_height(PageKind::Addons, &st) <= content_height(PageKind::Tasks, &st));
+    }
+
+    #[test]
+    fn notes_have_a_tab_only_while_their_add_on_is_on() {
+        let mut st = state();
+        assert!(!tabs(&st).contains(&PageKind::Notes));
+        st.addons.insert("notes", poni_core::addons::Status::Ready);
+        assert!(tabs(&st).contains(&PageKind::Notes));
+        assert!(content_height(PageKind::Notes, &st) <= content_height(PageKind::Tasks, &st));
     }
 
     #[test]

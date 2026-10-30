@@ -328,6 +328,10 @@ Press **Alt+Shift+R** in any app (or click the record button beside **MEETINGS**
 
 It won't start with less than 500 MB free, and stops by itself below 200 MB. If the meeting on the calendar has ended and it's still recording, the island says so. **Record meetings from any app** in the tray menu frees Alt+Shift+R. Nothing is sent anywhere, and nothing runs while it isn't recording.
 
+### Notes
+
+Sticky notes in the island, like Stickies or Notes on a Mac. Switch on **Notes** in the island's **+** tab, then open its tab: **+** makes a note and you write right there. Enter starts a new line, the first line is its title, and it saves as you type. Give a note one of five colours, pin it to the top, search them all, or delete one (Undo brings it back for a few seconds). In quick add, `/note` and the text saves a note without opening anything. Notes are kept on this PC with your tasks.
+
 ### Phone drop
 
 Send photos and files from your phone to the Shelf, or save Shelf files on your phone, over your own Wi-Fi. Nothing to install on the phone, and it works with iPhones and Android phones alike.

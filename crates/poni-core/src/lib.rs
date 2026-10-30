@@ -22,6 +22,7 @@ pub mod health;
 pub mod look;
 pub mod lrc;
 pub mod lrclib;
+pub mod notes;
 pub mod nowplaying;
 pub mod oyen;
 pub mod oyenza;

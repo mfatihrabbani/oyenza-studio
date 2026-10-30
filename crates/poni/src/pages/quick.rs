@@ -34,6 +34,9 @@ pub fn line(st: &AppState, q: &Quick) -> String {
         },
         Quick::Record if st.recording.is_some() => "\u{21b5} Stop recording".into(),
         Quick::Record => "\u{21b5} Record the meeting's sound".into(),
+        Quick::Note(_) if !st.notes_on() => "Notes are off (switch them on in +)".into(),
+        Quick::Note(text) if text.trim().is_empty() => "Type the note after /note".into(),
+        Quick::Note(_) => "\u{21b5} Save as a note".into(),
         Quick::Unknown => quick::HELP.into(),
     }
 }
@@ -82,6 +85,16 @@ pub fn run(st: &mut AppState, q: &Quick) -> bool {
             st.cmd(Command::SetSection(target));
         }
         Quick::Record => st.cmd(Command::ToggleRecording),
+        Quick::Note(text) => {
+            if !st.notes_on() || text.trim().is_empty() {
+                return false;
+            }
+            if st.store.notes.add(text.trim(), poni_core::notes::NoteColor::Yellow, st.unix).is_none() {
+                return false;
+            }
+            st.save();
+            st.notify(Icon::File, st.accent, "Note saved", poni_core::notes::title(text), 3.0, Some(crate::state::NoticeAction::OpenPage(PageKind::Notes)));
+        }
         Quick::Calc(None) | Quick::Unknown => return false,
     }
     true
