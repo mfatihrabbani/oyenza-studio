@@ -244,6 +244,14 @@ impl PhoneDrop {
 /// Transient per-page UI state (scroll offsets, text being typed, …).
 #[derive(Clone, Debug, Default)]
 pub struct PageUiState {
+    /// Sections tab: the section picked to change, the new one's name being
+    /// typed, the picked one's name being changed, the list's scroll, and
+    /// what the last change said went wrong (until a time, mono seconds).
+    pub section_edit: Option<usize>,
+    pub section_input: String,
+    pub section_rename: String,
+    pub section_scroll: f32,
+    pub section_note: Option<(&'static str, f64)>,
     pub task_input: String,
     pub task_scroll: f32,
     pub clip_scroll: f32,
@@ -586,8 +594,9 @@ impl AppState {
         }
         // Last open on the Script page, since switched off: open where a new
         // island does.
-        // The AI tab is empty at start, so it has no tab yet.
-        if (st.page == PageKind::Script && !st.script_on()) || st.page == PageKind::Agents {
+        // The AI tab is empty at start, so it has no tab yet; and the section
+        // that's on may hide the last page.
+        if (st.page == PageKind::Script && !st.script_on()) || st.page == PageKind::Agents || !crate::pages::tabs(&st).contains(&st.page) {
             st.page = PageKind::ALL[0];
         }
         st
@@ -601,6 +610,12 @@ impl AppState {
     /// The Script reader add-on is on: the Script tab shows.
     pub fn script_on(&self) -> bool {
         self.addon(poni_core::addons::SCRIPT_READER.id) == AddonStatus::Ready
+    }
+
+    /// The Sections add-on is on: its tab shows and the section that's on
+    /// picks the tabs.
+    pub fn sections_on(&self) -> bool {
+        self.addon(poni_core::addons::SECTIONS.id) == AddonStatus::Ready
     }
 
     /// The Calendar add-on is on: the Today page shows the meetings in the

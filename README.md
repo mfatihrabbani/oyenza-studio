@@ -316,6 +316,12 @@ The tools tell the island themselves, through their own hooks; nothing polls or 
 
 The hook runs the installed `poni.exe`, which passes what the tool said to the running island and exits at once. Open uses the window that was in front when you sent the prompt, else the first window whose title names the session's folder. Codex says only when a turn is done, so its sessions show as done, not working.
 
+### Sections
+
+Make your own sets of tabs and switch between them with a key. Switch on **Sections** in the island's **+** tab, then open its tab: type a name in **New section** and press Enter (it starts with the tabs you have now), and tap the tab chips on the right to show or hide each one. **Use** turns a section on; the island then shows only its tabs, plus Sections and Add-ons, so you can always get back.
+
+**Alt+Shift+1** to **Alt+Shift+9** switch to sections 1–9, in the order they're listed; **Alt+Shift+0** shows every tab again. In quick add, `/section` and part of a name does the same (`/section` alone: every tab). The island says which section is on. Up to nine sections, kept in settings.json with the one that's on. The shortcuts are taken only while there are sections.
+
 ### Phone drop
 
 Send photos and files from your phone to the Shelf, or save Shelf files on your phone, over your own Wi-Fi. Nothing to install on the phone, and it works with iPhones and Android phones alike.

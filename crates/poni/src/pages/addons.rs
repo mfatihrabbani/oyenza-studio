@@ -20,10 +20,13 @@ use poni_core::geom::{palette, Color, Point, Rect};
 use poni_core::phonedrop::fmt_bytes;
 
 const INTRO_H: f32 = 18.0;
-const ROWS_Y: f32 = 28.0;
+/// Five add-ons or more leave out the line above them, so the page stays
+/// within the window (the Tasks page's height).
+const MANY: bool = OFFERED.len() > 4;
+const ROWS_Y: f32 = if MANY { 0.0 } else { 28.0 };
 /// Rows are a little shorter once there are four, so the page stays within
 /// the window (the Tasks page's height).
-const ROW_H: f32 = if OFFERED.len() > 3 { 43.0 } else { 52.0 };
+const ROW_H: f32 = if MANY { 40.0 } else if OFFERED.len() > 3 { 43.0 } else { 52.0 };
 /// A row's name, its line and the download bar, from this far down the row.
 const TEXT_TOP: f32 = (ROW_H - 41.0) / 2.0;
 const BADGE: f32 = 36.0;
@@ -52,13 +55,16 @@ fn icon(a: &Addon) -> Icon {
         "ja" => Icon::Lyrics,
         "script" => Icon::Script,
         "calendar" => Icon::Video,
+        "sections" => Icon::Layers,
         _ => Icon::Addons,
     }
 }
 
 pub fn draw(ui: &mut Ui, st: &mut AppState, area: Rect) {
-    let intro = "Each one stays off until you switch it on, and switching off deletes any download.";
-    ui.c.text(intro, Rect::new(area.x, area.y, area.w, INTRO_H), &TextStyle::footnote().color(palette::TEXT_DIM));
+    if !MANY {
+        let intro = "Each one stays off until you switch it on, and switching off deletes any download.";
+        ui.c.text(intro, Rect::new(area.x, area.y, area.w, INTRO_H), &TextStyle::footnote().color(palette::TEXT_DIM));
+    }
     // The last row's hover wash meets the Pill card's rounded corners.
     let card = super::clipboard::pill_card(st, area);
     for (i, a) in OFFERED.iter().enumerate() {

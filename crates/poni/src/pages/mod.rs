@@ -20,6 +20,7 @@ pub mod oyenza;
 pub mod prayer;
 pub mod quick;
 pub mod script;
+pub mod sections;
 pub mod settings;
 pub mod shelf;
 pub mod system;
@@ -67,6 +68,8 @@ pub enum PageKind {
     Agents,
     /// Prayer times, while that add-on is on ([`tabs`]).
     Prayer,
+    /// The person's sections, while that add-on is on ([`tabs`]).
+    Sections,
     /// The "+" at the end of the tab row: features to switch on, each of
     /// which downloads only then (`poni_core::addons`).
     Addons,
@@ -75,7 +78,7 @@ pub enum PageKind {
 }
 
 impl PageKind {
-    pub const ALL: [PageKind; 14] = [
+    pub const ALL: [PageKind; 15] = [
         PageKind::Media,
         PageKind::Focus,
         PageKind::Health,
@@ -88,6 +91,7 @@ impl PageKind {
         PageKind::Oyenza,
         PageKind::Agents,
         PageKind::Prayer,
+        PageKind::Sections,
         PageKind::Addons,
         PageKind::Settings,
     ];
@@ -106,6 +110,7 @@ impl PageKind {
             PageKind::Oyenza => "oyenza",
             PageKind::Agents => "agents",
             PageKind::Prayer => "prayer",
+            PageKind::Sections => "sections",
             PageKind::Addons => "addons",
             PageKind::Settings => "settings",
         }
@@ -131,6 +136,7 @@ impl PageKind {
             PageKind::Oyenza => "Oyenza",
             PageKind::Agents => "AI",
             PageKind::Prayer => "Prayer",
+            PageKind::Sections => "Sections",
             PageKind::Addons => "Add-ons",
             PageKind::Settings => "Settings",
         }
@@ -150,6 +156,7 @@ impl PageKind {
             PageKind::Oyenza => Icon::Wallet,
             PageKind::Agents => Icon::Agent,
             PageKind::Prayer => Icon::Moon,
+            PageKind::Sections => Icon::Layers,
             PageKind::Addons => Icon::Addons,
             PageKind::Settings => Icon::Gear,
         }
@@ -176,16 +183,25 @@ impl PageKind {
 /// are on. Add-ons is last, in both apps (the Mac app's lists only what it
 /// has).
 pub fn tabs(st: &AppState) -> Vec<PageKind> {
+    // The section that's on picks among them; Sections and Add-ons always
+    // stay, so a section can't hide the way back.
+    let sections = st.sections_on();
     PageKind::ALL
         .into_iter()
-        .filter(|p| match p {
-            PageKind::Oyenza => st.oyenza.tab_visible(),
-            PageKind::Agents => !st.agents.sessions.list.is_empty(),
-            PageKind::Prayer => st.prayer_on(),
-            PageKind::Script => st.script_on(),
-            p => p.tabbed(),
-        })
+        .filter(|p| available(st, *p) && (!sections || matches!(p, PageKind::Sections | PageKind::Addons) || st.settings.sections.shows(p.key())))
         .collect()
+}
+
+/// Whether `p` has a tab at all now, whatever the section.
+pub(crate) fn available(st: &AppState, p: PageKind) -> bool {
+    match p {
+        PageKind::Oyenza => st.oyenza.tab_visible(),
+        PageKind::Agents => !st.agents.sessions.list.is_empty(),
+        PageKind::Prayer => st.prayer_on(),
+        PageKind::Script => st.script_on(),
+        PageKind::Sections => st.sections_on(),
+        p => p.tabbed(),
+    }
 }
 
 /// The tab after (or before) `p` among [`tabs`], wrapping around.
@@ -210,6 +226,7 @@ pub fn content_height(p: PageKind, st: &AppState) -> f32 {
         PageKind::Oyenza => oyenza::height(st),
         PageKind::Agents => agents::height(st),
         PageKind::Prayer => prayer::height(st),
+        PageKind::Sections => sections::height(st),
         PageKind::Addons => addons::height(st),
         PageKind::Settings => settings::height(st),
     }
@@ -341,6 +358,7 @@ pub(crate) fn draw_page(ui: &mut Ui, st: &mut AppState, area: Rect, page: PageKi
         PageKind::Oyenza => oyenza::draw(ui, st, area),
         PageKind::Agents => agents::draw(ui, st, area),
         PageKind::Prayer => prayer::draw(ui, st, area),
+        PageKind::Sections => sections::draw(ui, st, area),
         PageKind::Addons => addons::draw(ui, st, area),
         PageKind::Settings => settings::draw(ui, st, area),
     }
@@ -674,6 +692,21 @@ mod tests {
         st.agents.sessions.apply(ev, 0, None);
         assert!(tabs(&st).contains(&PageKind::Agents));
         assert!(content_height(PageKind::Agents, &st) <= content_height(PageKind::Tasks, &st));
+    }
+
+    #[test]
+    fn a_section_picks_the_tabs_but_never_hides_the_way_back() {
+        let mut st = state();
+        let every = tabs(&st);
+        st.settings.sections.add("Focus", vec!["tasks".into()]).unwrap();
+        st.settings.sections.activate(Some(0));
+        assert_eq!(tabs(&st), every, "the add-on is off: every tab");
+        st.addons.insert("sections", poni_core::addons::Status::Ready);
+        assert_eq!(tabs(&st), [PageKind::Tasks, PageKind::Sections, PageKind::Addons]);
+        st.settings.sections.activate(None);
+        assert!(tabs(&st).len() > 3 && tabs(&st).contains(&PageKind::Sections));
+        assert!(content_height(PageKind::Sections, &st) <= content_height(PageKind::Tasks, &st));
+        assert!(content_height(PageKind::Addons, &st) <= content_height(PageKind::Tasks, &st));
     }
 
     #[test]

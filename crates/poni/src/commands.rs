@@ -127,4 +127,6 @@ pub enum Command {
     Calendar(CalendarCmd),
     /// Bring an AI session's window to the front (its key).
     OpenAgent(String),
+    /// Turn a section on (its index; `None`: every tab), and say so.
+    SetSection(Option<usize>),
 }

@@ -68,6 +68,8 @@ const HOTKEY_PEEK: i32 = 1;
 const HOTKEY_SCRIPT: i32 = 2;
 /// Alt+Shift+Space opens the Tasks page's field from any app (quick add).
 const HOTKEY_QUICK: i32 = 3;
+/// Alt+Shift+0–9 switch sections (0: every tab): ids 10 to 19.
+const HOTKEY_SECTION_0: i32 = 10;
 /// Raises that follow a new foreground window, and their spacing.
 const RAISE_REPEATS: u8 = 4;
 const RAISE_INTERVAL_MS: u32 = 500;
@@ -379,6 +381,7 @@ pub struct App {
     /// Alt+Shift+S is registered (only while the Script page can read).
     script_hotkey: bool,
     quick_hotkey: bool,
+    section_hotkeys: bool,
     /// The Script page has asked for the island to stay out of screen capture.
     script_excluded: bool,
     /// A reading held the island open at the last tick.
@@ -563,6 +566,7 @@ impl App {
             peek_hotkey: false,
             script_hotkey: false,
             quick_hotkey: false,
+            section_hotkeys: false,
             script_excluded: false,
             script_held: false,
             script_shown: false,
@@ -638,6 +642,7 @@ impl App {
         self.set_peek_hotkey(false);
         self.set_script_hotkey(false);
         self.set_quick_hotkey(false);
+        self.set_section_hotkeys(false);
         self.glass.stop(self.hwnd, &mut self.gfx);
         if let Some(p) = self.phone.take() {
             p.stop();
@@ -1137,6 +1142,13 @@ impl App {
             }
             WM_HOTKEY if wp.0 == HOTKEY_PEEK as usize => {
                 self.toggle_readout();
+                self.request_frame();
+                Some(LRESULT(0))
+            }
+            WM_HOTKEY if (HOTKEY_SECTION_0 as usize..HOTKEY_SECTION_0 as usize + 10).contains(&wp.0) => {
+                let n = wp.0 - HOTKEY_SECTION_0 as usize;
+                self.refresh_time();
+                self.set_section(if n == 0 { None } else { Some(n - 1) });
                 self.request_frame();
                 Some(LRESULT(0))
             }
@@ -2494,6 +2506,42 @@ impl App {
         }
     }
 
+    /// Alt+Shift+0–9 belong to Poni only while there are sections to switch.
+    fn set_section_hotkeys(&mut self, on: bool) {
+        if on == self.section_hotkeys {
+            return;
+        }
+        self.section_hotkeys = on;
+        for n in 0..10u8 {
+            let id = HOTKEY_SECTION_0 + n as i32;
+            unsafe {
+                if on {
+                    if let Err(e) = RegisterHotKey(self.helper, id, MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, u32::from(b'0' + n)) {
+                        pwarn!("sections: Alt+Shift+{n} is taken ({e})");
+                    }
+                } else {
+                    let _ = UnregisterHotKey(self.helper, id);
+                }
+            }
+        }
+    }
+
+    /// Turn section `i` on (`None`: every tab). The island says which, and
+    /// leaves a page the section hides.
+    fn set_section(&mut self, i: Option<usize>) {
+        if !self.st.sections_on() || !self.st.settings.sections.activate(i) {
+            return;
+        }
+        self.save_settings();
+        let name = self.st.settings.sections.current().map_or_else(|| "Every tab".to_string(), |s| s.name.clone());
+        let tabs = pages::tabs(&self.st);
+        if self.st.page != PageKind::Settings && !tabs.contains(&self.st.page) {
+            self.st.page = tabs.first().copied().unwrap_or(PageKind::Addons);
+        }
+        self.st.notify(Icon::Layers, self.st.accent, name, "Section", 2.5, None);
+        pinfo!("sections: {}", if i.is_some() { "one on" } else { "every tab" });
+    }
+
     /// Alt+Shift+Space: the island opens on Tasks with its field ready to
     /// type in (a task, or a quick command); pressed again while the field
     /// waits, the island lets go and closes.
@@ -2884,6 +2932,7 @@ impl App {
         self.prayer_tick();
         self.calendar_tick();
         self.set_quick_hotkey(self.st.settings.quick_add && self.selftest.is_none());
+        self.set_section_hotkeys(self.st.sections_on() && !self.st.settings.sections.list.is_empty() && self.selftest.is_none());
         self.script_tick();
         // AI sessions: finished ones leave after a while; with the last one, the tab goes.
         self.st.agents.sessions.prune(self.st.unix);
@@ -3714,6 +3763,7 @@ impl App {
                 Command::Play(s) => services::sound::play(s),
                 Command::OpenUrl(u) => shell::open(&u),
                 Command::OpenAgent(key) => self.open_agent(&key),
+                Command::SetSection(i) => self.set_section(i),
                 Command::Calendar(c) => match c {
                     CalendarCmd::UseLink => self.use_calendar_link(),
                     CalendarCmd::Refresh => {

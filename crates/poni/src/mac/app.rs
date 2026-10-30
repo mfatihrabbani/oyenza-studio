@@ -1776,6 +1776,11 @@ impl App {
                 Command::OpenUrl(u) => services::open(&u),
                 // No Calendar add-on or AI sessions on the Mac yet.
                 Command::Calendar(_) | Command::OpenAgent(_) => {}
+                Command::SetSection(i) => {
+                    if self.st.settings.sections.activate(i) {
+                        self.save_settings();
+                    }
+                }
                 Command::WantStats(b) => self.set_stats(b),
                 Command::SetAutostart(on) => {
                     if (services::login::status() == Login::On) != on {

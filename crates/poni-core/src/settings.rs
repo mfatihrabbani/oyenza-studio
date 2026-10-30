@@ -116,6 +116,8 @@ pub struct Settings {
     /// Alt+Shift+Space opens the Tasks page's field from any app: a task,
     /// or a quick command (`quick`).
     pub quick_add: bool,
+    /// The person's sections and the one that's on (`sections`).
+    pub sections: crate::sections::Sections,
 }
 
 /// What plays when a prayer's time comes.
@@ -184,6 +186,7 @@ impl Default for Settings {
             game_peek: false,
             meeting_remind_min: 5,
             quick_add: true,
+            sections: crate::sections::Sections::default(),
         }
     }
 }
@@ -252,6 +255,7 @@ impl Settings {
         p.long_every = p.long_every.min(12);
         self.prayer.remind_before_min = self.prayer.remind_before_min.min(60);
         self.meeting_remind_min = self.meeting_remind_min.clamp(1, 60);
+        self.sections.sanitize();
         self
     }
 }

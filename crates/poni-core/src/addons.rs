@@ -130,8 +130,19 @@ pub const CALENDAR: Addon = Addon {
     files: &[],
 };
 
+/// Sections: the person's own sets of tabs, switched with Alt+Shift+1–9
+/// (`sections`). Built in; off, every tab shows and no shortcut is taken.
+pub const SECTIONS: Addon = Addon {
+    id: "sections",
+    title: "Sections",
+    blurb: "Your own sets of tabs, switched with Alt+Shift+1\u{2013}9.",
+    mac_blurb: None,
+    tag: "",
+    files: &[],
+};
+
 /// Every add-on, in the order the Add-ons page lists them.
-pub const ALL: [&Addon; 4] = [&PRAYER_TIMES, &JAPANESE_READINGS, &SCRIPT_READER, &CALENDAR];
+pub const ALL: [&Addon; 5] = [&PRAYER_TIMES, &JAPANESE_READINGS, &SCRIPT_READER, &CALENDAR, &SECTIONS];
 
 /// Whether Japanese readings switch themselves on for a song whose kanji went
 /// unread for want of them (`wants`): only while the person reads

@@ -34,6 +34,7 @@ pub mod quick;
 pub mod recorder;
 pub mod romanize;
 pub mod script;
+pub mod sections;
 pub mod settings;
 pub mod sha256;
 pub mod shelf;

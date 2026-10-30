@@ -26,6 +26,12 @@ pub fn line(st: &AppState, q: &Quick) -> String {
         },
         Quick::Calc(Some(v)) => format!("= {}  \u{21b5} Copy", quick::fmt_number(*v)),
         Quick::Calc(None) => "= \u{2026}".into(),
+        Quick::Section(_) if !st.sections_on() => "Sections are off (switch them on in +)".into(),
+        Quick::Section(name) if name.trim().is_empty() => "\u{21b5} Every tab".into(),
+        Quick::Section(name) => match st.settings.sections.find(name) {
+            Some(i) => format!("\u{21b5} Section {}", st.settings.sections.list[i].name),
+            None => "No section with that name".into(),
+        },
         Quick::Unknown => quick::HELP.into(),
     }
 }
@@ -60,6 +66,18 @@ pub fn run(st: &mut AppState, q: &Quick) -> bool {
             let text = quick::fmt_number(*v);
             st.notify(Icon::Copy, st.accent, "Copied", text.clone(), 2.5, None);
             st.cmd(Command::CopyText(text));
+        }
+        Quick::Section(name) => {
+            if !st.sections_on() {
+                return false;
+            }
+            let target = if name.trim().is_empty() {
+                None
+            } else {
+                let Some(i) = st.settings.sections.find(name) else { return false };
+                Some(i)
+            };
+            st.cmd(Command::SetSection(target));
         }
         Quick::Calc(None) | Quick::Unknown => return false,
     }
